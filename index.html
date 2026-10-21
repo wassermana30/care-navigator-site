@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Care Navigator — prototype</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1f6feb">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Care Navigator">
+</head>
+<body>
+  <header class="no-print">
+    <div class="brand">Care Navigator <span class="tag">prototype</span></div>
+    <nav>
+      <button class="tab active" data-view="meds">Get help</button>
+      <button class="tab" data-view="patient">Hospital bill (501r)</button>
+      <button class="tab" data-view="fight">Fight a bill</button>
+      <button class="tab" data-view="covered">Get covered</button>
+      <button class="tab" data-view="findcare">Find care</button>
+      <button class="tab" data-view="plan">My plan <span id="planCount" class="count hidden"></span></button>
+      <details class="more"><summary class="tab">For staff</summary>
+        <div class="more-menu">
+          <button class="tab" data-view="compare">Compare programs</button>
+          <button class="tab" data-view="hospital">Hospital dashboard</button>
+        </div>
+      </details>
+    </nav>
+  </header>
+
+  <div id="sample-banner" class="banner no-print"></div>
+
+  <!-- ============================ MEDICATIONS ============================ -->
+  <main id="view-meds">
+    <section class="search-hero no-print">
+      <h1>Tell us what you need help with</h1>
+      <p class="hint hero-sub">A medication, a symptom, or a diagnosis. We'll tell you where to go, who to see, and how to pay for it, even if you can't afford it.</p>
+      <div class="searchbox">
+        <input id="drugSearch" placeholder="e.g. &quot;I broke my arm and have no insurance&quot;, &quot;I need Eliquis&quot;, or &quot;my tooth really hurts&quot;" autocomplete="off">
+        <button type="button" class="clear-btn" id="clearHelp" title="Clear everything on this tab">Clear</button>
+        <div id="drugSuggest" class="suggest hidden"></div>
+      </div>
+      <p class="hint" id="dbStats"></p>
+      <p class="hint" id="aiBadge"></p>
+    </section>
+
+    <section id="chat" class="card hidden no-print">
+      <div id="chatLog"></div>
+      <div id="chatInput"></div>
+      <div id="chatUndo" class="hidden"><button type="button" class="ghost undo-btn" id="undoBtn" title="Take back your last answer and answer that question again">↩ Undo last answer</button></div>
+    </section>
+
+    <section id="medResults" class="hidden"></section>
+    <section id="medPacket" class="hidden"></section>
+  </main>
+
+  <!-- ============================ COMPARE ============================ -->
+  <main id="view-compare" class="hidden">
+    <h2>What every drug company program asks for</h2>
+    <p class="hint">Requirements found in each program's official application, as of the date shown. Common questions are the patient section we fill in once and reuse for every program.</p>
+    <div id="commonSummary" class="kpis"></div>
+    <div class="table-wrap"><table id="compareTable"></table></div>
+  </main>
+
+  <!-- ============================ PATIENT ============================ -->
+  <main id="view-patient" class="hidden">
+    <div class="bill-top no-print"><button class="clear-btn" id="clearBill" title="Clear everything on this tab">Clear form</button></div>
+    <ol class="steps no-print">
+      <li data-step="1" class="on">Your bill</li>
+      <li data-step="2">Your household</li>
+      <li data-step="3">What you qualify for</li>
+      <li data-step="4">Your application packet</li>
+    </ol>
+
+    <section class="step" id="step-1">
+      <h2>Where are you in the process?</h2>
+      <div class="timing-choice" id="timingChoice">
+        <label class="tchoice on"><input type="radio" name="timing" value="after" checked>
+          <b>I already have a hospital bill</b><span>Get it reduced or forgiven. We'll check your deadline.</span></label>
+        <label class="tchoice"><input type="radio" name="timing" value="before">
+          <b>My surgery or procedure is coming up</b><span>Plan ahead: apply before the procedure so you know your price up front.</span></label>
+      </div>
+      <h2 id="billHeading">Your hospital bill</h2>
+      <div class="grid">
+        <label>Your name<input id="name" autocomplete="name"></label>
+        <label>Phone or email<input id="contact"></label>
+        <label class="hosp-wrap">Hospital name (search all 5,400+ US hospitals)<input id="hospitalName" placeholder="Start typing a hospital or city, e.g. Methodist Houston" autocomplete="off">
+          <div id="hospSuggest" class="suggest hidden"></div><span id="hospInfo" class="hint"></span></label>
+        <label>Hospital type
+          <select id="hospitalType">
+            <option value="unsure">Not sure</option>
+            <option value="nonprofit">Nonprofit</option>
+            <option value="forprofit">For-profit</option>
+            <option value="government">Public / county</option>
+          </select>
+        </label>
+        <label>What is the bill for?
+          <select id="careType">
+            <option value="hospital">Hospital care (ER, surgery, stay, tests)</option>
+            <option value="physician">A separate bill from a doctor I saw at the hospital</option>
+            <option value="private-practice">A doctor's own office / private practice</option>
+            <option value="prescription">Prescription drugs</option>
+          </select>
+        </label>
+        <label id="schedWrap" class="hidden">Scheduled date<input id="scheduledDate" type="date"></label>
+        <label id="accountWrap">Account number (on the bill)<input id="account"></label>
+        <label><span id="amountLabel">Amount you owe ($)</span><input id="billAmount" type="number" min="0" step="1"></label>
+        <label id="firstBillWrap">Date of the first bill after you left the hospital<input id="firstBillDate" type="date"></label>
+        <label>State
+          <select id="state"></select>
+        </label>
+        <label>Insurance
+          <select id="insurance">
+            <option value="none">None</option>
+            <option value="private">Private / through work</option>
+            <option value="medicare">Medicare</option>
+            <option value="medicaid">Medicaid</option>
+          </select>
+        </label>
+        <details class="hosp-policy"><summary>Know your hospital's own assistance policy? (optional)</summary>
+          <p class="hint">Nonprofit hospitals must post their financial assistance policy online. If you have it, enter its income limits and we'll use them instead of the state minimum.</p>
+          <div class="grid"><label>Free care up to (% of poverty line)<input id="hospFree" type="number" min="0" placeholder="e.g. 200"></label>
+          <label>Discounts up to (% of poverty line)<input id="hospDiscount" type="number" min="0" placeholder="e.g. 400"></label></div></details>
+        <label class="check"><input type="checkbox" id="inCollections"> This bill has been sent to collections</label>
+        <label class="check"><input type="checkbox" id="hasRxCosts"> I also have expensive prescriptions</label>
+      </div>
+      <div class="actions">
+        <button class="ghost" id="loadExample">Load hypothetical example</button>
+        <button class="primary" data-go="2">Next</button>
+      </div>
+    </section>
+
+    <section class="step hidden" id="step-2">
+      <h2>Your household</h2>
+      <div class="grid">
+        <label>People in your household (you, spouse, dependents)<input id="householdSize" type="number" min="1" value="1"></label>
+      </div>
+      <h3>Income <span class="hint">add every source for everyone in the household</span></h3>
+      <div id="incomeRows"></div>
+      <button class="ghost" id="addIncome">+ Add income source</button>
+      <div class="actions">
+        <button class="ghost" data-go="1">Back</button>
+        <button class="primary" data-go="3">See what I qualify for</button>
+      </div>
+    </section>
+
+    <section class="step hidden" id="step-3">
+      <h2>What you qualify for</h2>
+      <div id="results"></div>
+      <div class="actions">
+        <button class="ghost" data-go="2">Back</button>
+        <button class="primary" data-go="4">Build my packet</button>
+      </div>
+    </section>
+
+    <section class="step hidden" id="step-4">
+      <div id="packet"></div>
+      <div class="actions no-print">
+        <button class="ghost" data-go="3">Back</button>
+        <button class="ghost" onclick="window.print()">Print / save as PDF</button>
+        <button class="primary" id="saveCase">Save &amp; track my application</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================ FIGHT A BILL ============================ -->
+  <main id="view-fight" class="hidden"></main>
+  <!-- ============================ GET COVERED ============================ -->
+  <main id="view-covered" class="hidden"></main>
+  <!-- ============================ FIND CARE ============================ -->
+  <main id="view-findcare" class="hidden"></main>
+  <!-- ============================ MY PLAN ============================ -->
+  <main id="view-plan" class="hidden"></main>
+
+  <!-- ============================ HOSPITAL ============================ -->
+  <main id="view-hospital" class="hidden">
+    <h2>Applications in progress</h2>
+    <p class="hint">What the sponsoring hospital's billing office sees. Saved on this computer only (prototype). <button class="ghost" id="clearData">Clear my saved data</button></p>
+    <div id="kpis" class="kpis"></div>
+    <table id="cases">
+      <thead><tr><th>Patient</th><th>Bill</th><th>% of poverty</th><th>Likely result</th><th>Apply by</th><th>Status</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="feedbackStats" class="card" style="margin-top:18px"></div>
+  </main>
+
+  <footer class="privacy no-print"><span class="legal-note">This tool shows what programs say they offer. It is not medical or legal advice, and it does not decide your application. Only the program can do that.</span><br>Your answers stay in this browser. Nothing is submitted for you. With AI mode on, only what you type in the search bar is sent to Claude to be read. Not medical advice. In an emergency, call 911.</footer>
+  <script src="loader.js"></script>
+  <script src="config.js"></script>
+  <script src="hospital-search.js"></script>
+  <script src="state-laws.js"></script>
+  <script src="logic.js"></script>
+  <script src="programs.js"></script>
+  <script src="meds-logic.js"></script>
+  <script src="lexicon.js"></script>
+  <script src="nl-parse.js"></script>
+  <script src="care-data.js"></script>
+  <script src="care-logic.js"></script>
+  <script src="symptom-data.js"></script>
+  <script src="symptom-conditions.js"></script>
+  <script src="symptom-logic.js"></script>
+  <script src="question-options.js"></script>
+  <script src="app.js"></script>
+  <script src="forms/fill.js"></script>
+  <script src="share.js"></script>
+  <script>
+    // Spanish phrases (0.5 MB) load only when the page will be shown in Spanish (same choice i18n.js makes).
+    (function () { var s = null; try { s = localStorage.getItem("lang") || localStorage.getItem("cn.lang"); } catch (e) {}
+      var nav = (navigator.language || "").slice(0, 2).toLowerCase();
+      if (s === "es" || (!s && nav === "es")) document.write('<script src="i18n-es.js"><\/script>'); })();
+  </script>
+  <script src="i18n-multi.js"></script>
+  <script src="i18n.js"></script>
+  <script src="meds-app.js"></script>
+  <script src="plan.js"></script>
+  <script src="findcare.js"></script>
+  <script src="covered-data.js"></script>
+  <script src="covered.js"></script>
+  <script src="fight-data.js"></script>
+  <script src="fight.js"></script>
+  <script src="help.js"></script>
+  <script src="tabtools.js"></script>
+</body>
+</html>

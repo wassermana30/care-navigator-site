@@ -1,0 +1,16 @@
+{
+  "name": "Care Navigator",
+  "short_name": "Care Navigator",
+  "description": "Free help finding care and paying for it: symptoms, medications, hospital bills, coverage, and clinics near you.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8fb",
+  "theme_color": "#1f6feb",
+  "lang": "en",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
