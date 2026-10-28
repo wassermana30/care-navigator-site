@@ -10,8 +10,27 @@ var I18N = (function () {
   var lang = codes.indexOf(saved) >= 0 ? saved : codes.indexOf(nav) >= 0 ? nav : "en";
   var META = LANGS.filter(function (L) { return L.code === lang; })[0] || LANGS[0];
   if (typeof I18N_ES === "undefined") window.I18N_ES = {};  // not loaded (page isn't in Spanish)
-  var MAP = lang === "es" ? Object.assign({}, (typeof I18N_MULTI !== "undefined" && I18N_MULTI.es) || {}, I18N_ES)
-          : lang === "en" ? {} : ((typeof I18N_MULTI !== "undefined" && I18N_MULTI[lang]) || {});
+  // Full translation pack for the chosen language (i18n-pack-<lang>.js): exact phrases + number templates.
+  var PACK = (typeof I18N_PACK !== "undefined" && I18N_PACK.lang === lang) ? I18N_PACK : { static: {}, templates: {} };
+  var MAP = lang === "en" ? {} : Object.assign({}, (typeof I18N_MULTI !== "undefined" && I18N_MULTI[lang]) || {}, lang === "es" ? I18N_ES : {}, PACK.static);
+  var TPL = PACK.templates || {};
+  // Numbers, money, dates, phone numbers and state codes become {0}, {1}... so one template covers every value.
+  // Must match normalize() in build_i18n_inventory.py.
+  var STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY";
+  var TOKEN = new RegExp("\\$[\\d,]+(?:\\.\\d+)?|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}/\\d{1,2}/\\d{2,4}|(?:1-)?(?:\\(\\d{3}\\) ?|\\d{3}-)\\d{3}-\\d{4}|1-800-[A-Z]{4,}|\\d+(?:[.,]\\d+)*|\\b(?:" + STATES.split(" ").join("|") + ")\\b", "g");
+  function normalize(t) { var vals = []; var key = t.replace(TOKEN, function (m) { vals.push(m); return "{" + (vals.length - 1) + "}"; }); return { key: key, vals: vals }; }
+  function fill(tpl, vals) { return tpl.replace(/\{(\d+)\}/g, function (m, i) { return vals[+i] !== undefined ? vals[+i] : m; }); }
+  // Sentences built from pieces: the {0} part is translated too. Must match COMPOSITES in build_i18n_inventory.py.
+  var COMPOSITES = ["Get checked: {0}", "Get checked today: {0}", "Go sooner if: {0}.", "Call {0}", "· Call {0}",
+    "Tell them your symptoms ({0}), when they started, and what makes them better or worse.", 'Ask: "Could this be {0}?"',
+    "Search more programs for {0}", "Possible {0}", "Paying for {0}", "Financial assistance: {0}", "Got it: {0}.",
+    "Your options for {0}", "{0} is also possible and can be serious, so get checked today.", 'You said yes to: "{0}"',
+    "You weren't sure about: \"{0}\". When in doubt, get checked.", "Lives in {0}", "Apply to {0}", "My care plan: {0}",
+    "Thanks for telling us. Need help now? Tap {0}.", "Do you live in {0}?", "Apply for financial assistance at {0} by"
+  ].map(function (k) {
+    var src = k.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace("\\{0\\}", "{0}").replace("{0}", "(.+)");
+    return { key: k, re: new RegExp("^" + src + "$") };
+  });
   var RULES = [  // text with numbers or names in it
     [/^(\d+) programs and (\d+) brand-name medications in the database\. Rules checked against official sources (\S+)\.$/, function (m, a, b, d) { return a + " programas y " + b + " medicamentos de marca en la base de datos. Reglas revisadas en fuentes oficiales el " + d + "."; }],
     [/^I also picked up: (.+)\.$/, function (m, list) { return "También entendí: " + list.split(", ").map(function (x) { return tr(x) || x; }).join(", ") + "."; }],
@@ -35,6 +54,41 @@ var I18N = (function () {
     [/^source (\d)$/, function (m, n) { return "fuente " + n; }],
     [/^ · Call (.+)$/, function (m, p) { return " · Llame al " + p; }]
   ];
+  // Translate one piece of text. Returns null if there's no translation (it stays as is).
+  function find(t, depth) {
+    if (!t) return null;
+    var hit = MAP[t];
+    if (hit !== undefined) return hit;
+    // lowercase pieces inside sentences ("strep throat") can use the capitalized phrase
+    if (MAP[t + "."] !== undefined) return MAP[t + "."].replace(/[.。．]$/, "");  // same phrase without its final period
+    var cap = t.charAt(0).toUpperCase() + t.slice(1);
+    if (cap !== t && MAP[cap] !== undefined) return MAP[cap].charAt(0).toLowerCase() + MAP[cap].slice(1);
+    var n = normalize(t);
+    if (n.vals.length && TPL[n.key] !== undefined) return fill(TPL[n.key], n.vals);
+    if ((depth || 0) > 2) return null;
+    for (var c = 0; c < COMPOSITES.length; c++) {
+      var m = t.match(COMPOSITES[c].re);
+      if (m && TPL[COMPOSITES[c].key] !== undefined) return TPL[COMPOSITES[c].key].replace("{0}", find(m[1], (depth || 0) + 1) || m[1]);
+    }
+    // Long text made of known sentences, list items, or "Label: text"
+    var parts = splitAll(t);
+    if (parts) {
+      var out = parts.map(function (p) { return p.sep ? p.text : find(p.text, (depth || 0) + 1); });
+      if (out.every(function (x) { return x !== null; })) return out.join("");
+    }
+    return null;
+  }
+  function splitAll(t) {
+    var seps = [/(?<=[.!?])\s+(?=[A-Z"(])/, /; /, /, /, /: /];
+    for (var i = 0; i < seps.length; i++) {
+      var bits = t.split(seps[i]); if (bits.length < 2) continue;
+      var glue = t.match(new RegExp(seps[i].source, "g")) || [];
+      var parts = []; bits.forEach(function (b, j) { parts.push({ text: b }); if (j < glue.length) parts.push({ text: glue[j], sep: true }); });
+      if (seps[i].source === ": " && bits.length === 2) { parts = [{ text: bits[0] + ":" }, { text: " ", sep: true }, { text: bits[1] }]; }
+      return parts;
+    }
+    return null;
+  }
   function tr(raw) {
     var t = raw.trim(); if (!t) return null;
     var hit = MAP[t];
@@ -42,14 +96,21 @@ var I18N = (function () {
       if (RULES[i][0].test(raw)) return raw.replace(RULES[i][0], RULES[i][1]);
       if (RULES[i][0].test(t)) { hit = t.replace(RULES[i][0], RULES[i][1]); break; }
     }
-    if (hit === undefined) return null;
+    if (hit === undefined) hit = find(t, 0);
+    if (hit === undefined || hit === null) return null;
     return raw.replace(t, hit);  // keep surrounding spaces
   }
   function skip(el) { return !el || el.closest && el.closest(".msg.me, [data-no-i18n], script, style, textarea, input, select option[data-raw]"); }
   function walk(node) {
     if (lang === "en") return;
     if (node.nodeType === 3) { if (!skip(node.parentElement)) { var n = tr(node.nodeValue); if (n !== null && n !== node.nodeValue) node.nodeValue = n; } return; }
-    if (node.nodeType !== 1 || skip(node)) return;
+    if (node.nodeType !== 1) return;
+    // Input boxes: translate the hint (placeholder) and labels, never what's typed in them.
+    if (/^(INPUT|TEXTAREA)$/.test(node.tagName) && !node.closest("[data-no-i18n]")) {
+      ["placeholder", "title", "aria-label"].forEach(function (a) { var v = node.getAttribute(a); if (v) { var n = tr(v); if (n) node.setAttribute(a, n); } });
+      return;
+    }
+    if (skip(node)) return;
     ["placeholder", "title", "aria-label"].forEach(function (a) { var v = node.getAttribute && node.getAttribute(a); if (v) { var n = tr(v); if (n) node.setAttribute(a, n); } });
     for (var c = node.firstChild; c; c = c.nextSibling) walk(c);
   }
@@ -76,17 +137,17 @@ var I18N = (function () {
     if (META.status === "draft" && typeof I18N_DRAFT_NOTE !== "undefined") {
       var b = document.getElementById("sample-banner");
       if (b) b.insertAdjacentHTML("afterend", "<div class='banner draft-note no-print' data-no-i18n>⚠ " + (I18N_DRAFT_NOTE[lang] || "") +
-        " <span class='hint'>(Plan details and program information are shown in English. Spanish is fully translated.)</span></div>");
+        "</div>");
     }
     var ph = document.getElementById("drugSearch");
     if (ph && lang === "es") ph.placeholder = 'p. ej. "me rompí el brazo y no tengo seguro", "necesito Eliquis" o "me duele mucho una muela"';
-    else if (ph && MAP["Tell us what you need help with"]) ph.placeholder = MAP["Tell us what you need help with"];
+    else if (ph) { var phT = tr(ph.placeholder); ph.placeholder = phT || MAP["Tell us what you need help with"] || ph.placeholder; }
     walk(document.body);
     new MutationObserver(function (muts) { muts.forEach(function (m) {
       if (m.type === "characterData") walk(m.target); else m.addedNodes.forEach(walk);
-    }); if (lang === "es") noteEnglishDetails(); }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    }); }).observe(document.body, { childList: true, subtree: true, characterData: true });
   }
-  return { lang: lang, tr: tr, start: start, walk: walk };
+  return { lang: lang, tr: tr, start: start, walk: walk, normalize: normalize, find: find };
 })();
 if (typeof document !== "undefined") {
   try { var th = localStorage.getItem("theme"); if (th) document.documentElement.setAttribute("data-theme", th); } catch (e) {}

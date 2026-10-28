@@ -207,10 +207,12 @@
   <script src="forms/fill.js"></script>
   <script src="share.js"></script>
   <script>
-    // Spanish phrases (0.5 MB) load only when the page will be shown in Spanish (same choice i18n.js makes).
+    // Translations load only for the chosen language (same choice i18n.js makes): Spanish phrase map + a full pack per language.
     (function () { var s = null; try { s = localStorage.getItem("lang") || localStorage.getItem("cn.lang"); } catch (e) {}
-      var nav = (navigator.language || "").slice(0, 2).toLowerCase();
-      if (s === "es" || (!s && nav === "es")) document.write('<script src="i18n-es.js"><\/script>'); })();
+      var codes = ["es", "ht", "pt", "zh", "vi", "tl", "ko", "ar", "ru", "fr", "pl", "am", "ne", "so"];
+      var nav = (navigator.language || "").slice(0, 2).toLowerCase(), l = codes.indexOf(s) >= 0 ? s : (!s && codes.indexOf(nav) >= 0 ? nav : null);
+      if (l === "es") document.write('<script src="i18n-es.js"><\/script>');
+      if (l) document.write('<script src="i18n-pack-' + l + '.js"><\/script>'); })();
   </script>
   <script src="i18n-multi.js"></script>
   <script src="i18n.js"></script>

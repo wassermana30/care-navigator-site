@@ -363,7 +363,7 @@
     else steps.push((u === "today" ? "Get checked today: " : "Get checked: ") + where);
     steps.push("Tell them your symptoms" + (said.length ? " (" + said.join(", ") + ")" : "") + ", when they started, and what makes them better or worse." +
       (top ? " Ask: \"Could this be " + top.label.toLowerCase() + "?\"" : ""));
-    if (top && top.seeDoctorIf && top.seeDoctorIf.length) steps.push("Go sooner if: " + top.seeDoctorIf.join("; ") + ".");
+    if (top && top.seeDoctorIf && top.seeDoctorIf.length) steps.push("Go sooner if: " + top.seeDoctorIf.map(function (x) { return x.replace(/\.$/, ""); }).join("; ") + ".");
     steps.push("Only a doctor can confirm what this is. Ask what tests you need, and what they cost, before they're done.");
     return Object.assign(plan, {
       urgency: u, urgencyInfo: URGENCY[u], where: where, who: top && top.who && top.who.length ? top.who : ["Primary care provider or community health center"],
