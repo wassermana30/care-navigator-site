@@ -26,7 +26,8 @@ var I18N = (function () {
     "Search more programs for {0}", "Possible {0}", "Paying for {0}", "Financial assistance: {0}", "Got it: {0}.",
     "Your options for {0}", "{0} is also possible and can be serious, so get checked today.", 'You said yes to: "{0}"',
     "You weren't sure about: \"{0}\". When in doubt, get checked.", "Lives in {0}", "Apply to {0}", "My care plan: {0}",
-    "Thanks for telling us. Need help now? Tap {0}.", "Do you live in {0}?", "Apply for financial assistance at {0} by"
+    "Thanks for telling us. Need help now? Tap {0}.", "Do you live in {0}?", "Apply for financial assistance at {0} by",
+    "⚠ Get help now: {0}", "Get help with: {0}"
   ].map(function (k) {
     var src = k.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace("\\{0\\}", "{0}").replace("{0}", "(.+)");
     return { key: k, re: new RegExp("^" + src + "$") };

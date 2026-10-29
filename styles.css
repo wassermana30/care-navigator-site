@@ -237,3 +237,9 @@ nav .count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left
 
 /* ---------- offline notice (installed app) ---------- */
 .offline-bar { background: #1d2433; color: #fff; padding: 8px 16px; font-size: 13.5px; text-align: center; }
+
+/* ---------- search suggestions: symptom / condition / medication ---------- */
+.sug-tag { display: inline-block; min-width: 82px; font-size: 11.5px; font-weight: 600; padding: 1px 7px; margin-right: 6px; border-radius: 9px; text-align: center; }
+.sug-symptom { background: #e0f2fe; color: #075985; } .sug-condition { background: #ede9fe; color: #5b21b6; } .sug-medication { background: #dcfce7; color: #166534; }
+.suggest button.on { background: var(--bg, #f6f8fb); outline: 2px solid var(--accent, #1f6feb); outline-offset: -2px; }
+:root[data-theme=dark] .sug-tag { filter: brightness(.9); }

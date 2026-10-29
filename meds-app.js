@@ -32,36 +32,41 @@
   // ------------------------------------------------------------ search
   var input = $("drugSearch"), sug = $("drugSuggest");
   function isSentence(v) { return v.trim().split(/\s+/).length >= 5 || /\d/.test(v); }
-  input.addEventListener("input", function () {
-    if (isSentence(input.value)) {
-      sug.innerHTML = "<button class='other' id='useSentence'>Press Enter and I'll read your whole description</button>";
-      sug.classList.remove("hidden");
-      $("useSentence").onclick = function () { fromSentence(input.value); };
-      return;
-    }
-    var hits = MedsLogic.searchDrugs(input.value, PROGRAMS).slice(0, 8);
-    if (!input.value.trim()) { sug.classList.add("hidden"); return; }
-    var det = CareLogic.detect(input.value), cnd = CareLogic.primary(det.conditions);
-    if ((cnd || det.redFlags.length) && !exactDrug(input.value)) {
-      sug.innerHTML = "<button class='care-sug' id='careSug'>Get help with: " + esc(det.redFlags.length ? det.redFlags[0].title : cnd.label) + "</button>" +
-        hits.slice(0, 4).map(function (d) { return "<button data-brand='" + esc(d.brand) + "'>" + esc(d.label) + "</button>"; }).join("");
-      sug.classList.remove("hidden");
-      $("careSug").onclick = function () { route(input.value); };
-      sug.querySelectorAll("button[data-brand]").forEach(function (b) { b.onclick = function () { start(b.dataset.brand); }; });
-      return;
-    }
-    var extra = hits.length ? "" : MedsLogic.looksLikeDrug(input.value)
-      ? "<button data-brand='' class='other'>Not in our list. Press Enter for suggestions</button>"
-      : "<button data-brand='' class='other'>That doesn't look like a medication. Press Enter for examples</button>";
-    sug.innerHTML = hits.map(function (d) { return "<button data-brand='" + esc(d.brand) + "'>" + esc(d.label) + "</button>"; }).join("") + extra;
+  // Suggestions while typing: symptoms, conditions and medications (suggest.js), matched to the word being typed.
+  var TAG = { symptom: "Symptom", condition: "Condition", medication: "Medication" }, picks = [], hi = -1;
+  function hideSug() { sug.classList.add("hidden"); picks = []; hi = -1; }
+  function pick(sg) {
+    var whole = input.value.trim().toLowerCase();
+    // Typing only a medication's name: go straight to medication help.
+    if (sg.kind === "medication" && (whole === sg.fragment || sg.insert.toLowerCase().indexOf(whole) === 0)) { hideSug(); return start(sg.brand); }
+    input.value = Suggest.apply(input.value, sg) + " ";
+    hideSug(); input.focus();
+  }
+  function showSug() {
+    var text = input.value;
+    if (!text.trim()) return hideSug();
+    var det = CareLogic.detect(text), flag = det.redFlags[0];
+    picks = Suggest.suggest(text, 6); hi = -1;
+    var cnd = !picks.length && !flag ? CareLogic.primary(det.conditions) : null;
+    sug.innerHTML =
+      (flag ? "<button class='care-sug' data-act='go'>⚠ Get help now: " + esc(flag.title) + "</button>" : "") +
+      picks.map(function (p, i) { return "<button data-i='" + i + "'><span class='sug-tag sug-" + p.kind + "'>" + TAG[p.kind] + "</span> " + esc(p.label) + "</button>"; }).join("") +
+      (cnd ? "<button class='care-sug' data-act='go'>Get help with: " + esc(cnd.label) + "</button>" : "") +
+      "<button class='other' data-act='go'>" + (isSentence(text) ? "Press Enter and I'll read your whole description" : "Press Enter and I'll look it up") + "</button>";
     sug.classList.remove("hidden");
     sug.querySelectorAll("button").forEach(function (b) {
-      b.onclick = function () { b.dataset.brand ? start(b.dataset.brand) : notFound(input.value.trim()); };
+      b.onclick = function () { if (b.dataset.act === "go") { hideSug(); route(input.value); } else pick(picks[+b.dataset.i]); };
     });
-  });
+  }
+  function highlight() { sug.querySelectorAll("button[data-i]").forEach(function (b) { b.classList.toggle("on", +b.dataset.i === hi); }); }
+  input.addEventListener("input", showSug);
   input.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown" && picks.length) { e.preventDefault(); hi = Math.min(picks.length - 1, hi + 1); highlight(); return; }
+    if (e.key === "ArrowUp" && picks.length) { e.preventDefault(); hi = Math.max(-1, hi - 1); highlight(); return; }
+    if (e.key === "Escape") { hideSug(); return; }
     if (e.key !== "Enter") return;
-    route(input.value);
+    if (hi >= 0 && picks[hi]) { e.preventDefault(); return pick(picks[hi]); }
+    hideSug(); route(input.value);
   });
 
   var EXAMPLES = ["Ozempic", "Eliquis", "Trulicity",
