@@ -4,6 +4,9 @@ var I18N = (function () {
   // Languages come from Joseph's table (i18n-multi.js). Spanish uses the full phrase map (i18n-es.js);
   // the other 13 cover the interface, questions and emergency messages, and show his "draft" notice.
   var LANGS = typeof I18N_LANGS !== "undefined" ? I18N_LANGS : [{ code: "en", native: "English", dir: "ltr", status: "official" }, { code: "es", native: "Español", dir: "ltr", status: "reviewed" }];
+  // Offered for now: the four fully finished languages. The other translation packs stay saved; add a code here to bring one back.
+  var OFFERED = ["en", "es", "fr", "zh"];
+  LANGS = LANGS.filter(function (L) { return OFFERED.indexOf(L.code) >= 0; });
   var codes = LANGS.map(function (L) { return L.code; });
   var saved = null; try { saved = localStorage.getItem("lang") || localStorage.getItem("cn.lang"); } catch (e) {}
   var nav = (navigator.language || "en").slice(0, 2).toLowerCase();

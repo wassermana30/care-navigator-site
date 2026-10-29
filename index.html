@@ -209,7 +209,7 @@
   <script>
     // Translations load only for the chosen language (same choice i18n.js makes): Spanish phrase map + a full pack per language.
     (function () { var s = null; try { s = localStorage.getItem("lang") || localStorage.getItem("cn.lang"); } catch (e) {}
-      var codes = ["es", "ht", "pt", "zh", "vi", "tl", "ko", "ar", "ru", "fr", "pl", "am", "ne", "so"];
+      var codes = ["es", "fr", "zh"];  // must match OFFERED in i18n.js
       var nav = (navigator.language || "").slice(0, 2).toLowerCase(), l = codes.indexOf(s) >= 0 ? s : (!s && codes.indexOf(nav) >= 0 ? nav : null);
       if (l === "es") document.write('<script src="i18n-es.js"><\/script>');
       if (l) document.write('<script src="i18n-pack-' + l + '.js"><\/script>'); })();
