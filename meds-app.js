@@ -46,7 +46,7 @@
     var text = input.value;
     if (!text.trim()) return hideSug();
     var det = CareLogic.detect(text), flag = det.redFlags[0];
-    picks = Suggest.suggest(text, 6); hi = -1;
+    picks = Suggest.suggest(text, 24); hi = -1;
     var cnd = !picks.length && !flag ? CareLogic.primary(det.conditions) : null;
     sug.innerHTML =
       (flag ? "<button class='care-sug' data-act='go'>⚠ Get help now: " + esc(flag.title) + "</button>" : "") +

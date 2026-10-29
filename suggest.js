@@ -57,7 +57,10 @@ var Suggest = (function () {
       names.forEach(function (n, i) { if (n) index.push({ kind: "condition", label: c.label, match: norm(n), insert: n.replace(/\s*\(.*?\)/g, "").toLowerCase(), id: c.id, primary: i === 0 }); });
     });
     if (typeof PROGRAMS !== "undefined" && typeof MedsLogic !== "undefined") {
-      MedsLogic.drugIndex(PROGRAMS).forEach(function (d) { index.push({ kind: "medication", label: d.label || d.brand, match: norm(d.brand), insert: d.brand, brand: d.brand, primary: true }); });
+      // Every name a medication goes by: brand and generic ("ins" finds Lantus through "insulin glargine").
+      MedsLogic.drugIndex(PROGRAMS).forEach(function (d) {
+        [d.brand].concat(d.names || []).forEach(function (n, i) { index.push({ kind: "medication", label: d.label || d.brand, match: norm(n), insert: d.brand, brand: d.brand, primary: i === 0 }); });
+      });
     }
     return index;
   }
@@ -68,12 +71,14 @@ var Suggest = (function () {
     return out;
   }
   var STOP = { i: 1, a: 1, an: 1, the: 1, my: 1, have: 1, has: 1, and: 1, or: 1, is: 1, it: 1, to: 1, in: 1, of: 1, me: 1, im: 1, "i'm": 1, with: 1, been: 1, so: 1, really: 1, very: 1, bad: 1, need: 1, help: 1 };
-  // Returns up to `limit` suggestions: { kind, label, insert, fragment, brand?, id? }
+  // Returns suggestions: symptoms and conditions first (up to 4), then medications (up to 20),
+  // so typing "ins" shows every insulin and typing "sore thr" shows the symptom. Each: { kind, label, insert, fragment, brand?, id? }
   function suggest(text, limit) {
-    var r = match(text, limit);
+    var r = match(text, 999);
     // Nothing for the half-typed word? Try the words before it ("my stomach hu" -> "stomach").
-    if (!r.length) { var w = String(text || "").trim().split(/\s+/); if (w.length > 1) r = match(w.slice(0, -1).join(" "), limit).map(function (x) { x.fragment = x.fragment + " " + w[w.length - 1].toLowerCase(); return x; }); }
-    return r;
+    if (!r.length) { var w = String(text || "").trim().split(/\s+/); if (w.length > 1) r = match(w.slice(0, -1).join(" "), 999).map(function (x) { x.fragment = x.fragment + " " + w[w.length - 1].toLowerCase(); return x; }); }
+    var care = r.filter(function (x) { return x.kind !== "medication"; }).slice(0, 4), meds = r.filter(function (x) { return x.kind === "medication"; }).slice(0, 20);
+    return care.concat(meds).slice(0, limit || 24);
   }
   function match(text, limit) {
     var idx = build(), frags = fragments(text), seen = {}, out = [], found = false;
