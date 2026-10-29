@@ -16,6 +16,9 @@
   // Installable app: register the offline helper. Browsers only allow this on a web address (https or localhost), not a file.
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+    // When a newer version takes over (not the very first install), reload once so the new version shows right away.
+    var hadOld = !!navigator.serviceWorker.controller, reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () { if (hadOld && !reloaded) { reloaded = true; location.reload(); } });
   }
   // Offline notice
   function offline() {
