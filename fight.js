@@ -151,6 +151,8 @@ if (typeof document !== "undefined") (function () {
   document.querySelectorAll("#fbChoices button").forEach(function (b) { b.onclick = function () { render(b.dataset.s); document.dispatchEvent(new CustomEvent("tabchange", { detail: "fight" })); }; });
   // For Undo / Clear (tabtools.js)
   window.FightUI = {
+    open: function (sid) { showView("fight"); render(sid); },
+    situationFor: function (factId) { var s = SITUATIONS.filter(function (x) { return x.facts.indexOf(factId) >= 0; })[0]; return s ? s.id : null; },
     current: function () { var b = document.querySelector("#fbChoices button.on"); return b ? b.dataset.s : null; },
     render: render,
     reset: function () { document.getElementById("fbOut").innerHTML = ""; document.querySelectorAll("#fbChoices button").forEach(function (b) { b.classList.remove("on"); }); }

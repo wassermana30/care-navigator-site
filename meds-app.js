@@ -205,6 +205,9 @@
 
   function prependBot(html) { $("chatLog").insertAdjacentHTML("afterbegin", "<div class='msg bot'>" + html + "</div>"); }
 
+  // Other parts of the app (site search, the guide) can send a question into Get help.
+  window.askGetHelp = function (text) { showView("meds"); input.value = text; sug.classList.add("hidden"); route(text); window.scrollTo(0, 0); };
+
   function route(raw) {
     var text = String(raw || "").trim();
     if (!text) return;

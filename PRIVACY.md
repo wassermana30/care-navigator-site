@@ -18,8 +18,10 @@ process owner to agree in writing before the harness touches real data.
 **Not collected:** Social Security numbers, insurance member IDs, medical records, payment cards. The app never
 submits anything to a hospital or drug company. The patient (or a counselor sitting with them) does.
 
-## AI mode (Claude Sonnet 5.5)
-- Only the text typed into the search bar is sent, from the local server (`serve.py`), never directly from the browser.
+## AI mode (Claude Sonnet 5.5 for the search bar, Claude Opus 5.5 for the guidance chat)
+- Only the text typed into the search bar, and the messages typed into "Ask for guidance", are sent, from the local
+  server (`serve.py`), never directly from the browser. Emergency messages are answered in the browser and never sent.
+- On the published site (no server), AI mode is off: the search bar and the guidance chat use the built-in reader.
 - The server does not log the text. It logs only a request ID.
 - Anthropic's API terms apply to that text. **Before real patients:** confirm the account's data-retention
   settings with Anthropic and decide whether a Business Associate Agreement (HIPAA) is needed for the deployment.
