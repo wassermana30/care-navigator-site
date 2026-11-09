@@ -296,3 +296,7 @@ a.btn-link { display: inline-block; padding: 9px 14px; border-radius: 8px; text-
 a.btn-link.primary { background: var(--accent, #1f6feb); color: #fff; }
 a.btn-link.ghost { border: 1px solid var(--line, #dde3ec); color: inherit; }
 @media print { .apply-step .copy-btn, .apply-step .row-actions { display: none !important; } }
+
+/* Test-session collector (collect.js, only with ?collect=1) */
+.collect-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: #fff8c5; color: #4d3800; border-bottom: 1px solid #d4a72c; font-size: 13px; padding: 6px 12px; text-align: center; }
+.collect-bar button { font: inherit; font-size: 12px; padding: 2px 8px; margin-left: 4px; border: 1px solid #d4a72c; border-radius: 5px; background: #fff; cursor: pointer; }

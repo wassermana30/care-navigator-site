@@ -222,14 +222,22 @@
     var det = CareLogic.detect(text), careHit = det.redFlags.length || det.conditions.length;
     var sd = SymptomLogic.detect(text), symHit = symptomHit(sd);
     var exact = exactDrug(text);
-    if (exact && !careHit && !symHit) return start(exact.brand);
-    if (symHit) return startSymptoms(text, NLParse.parse(text, PROGRAMS), det, sd);
-    if (careHit) return startCare(text, NLParse.parse(text, PROGRAMS), det);
-    if (isSentence(text)) return fromSentence(text);
-    var hits = MedsLogic.searchDrugs(text, PROGRAMS);
-    if (hits.length) return start(hits[0].brand);
+    // What the app decided, for the eval suite (eval/m5). Never stored or sent anywhere.
+    var trace = window.GetHelpTrace = { text: text, redFlags: det.redFlags.map(function (f) { return f.id + ":" + f.action; }),
+      conditions: det.conditions.map(function (c) { return c.id; }), symptoms: sd.symptoms.slice(), named: (sd.named || []).map(function (n) { return n.id || n; }), path: null, drug: null };
+    if (exact && !careHit && !symHit) { trace.path = "medication"; trace.drug = exact.brand; return start(exact.brand); }
+    if (symHit) { trace.path = "symptoms"; return startSymptoms(text, NLParse.parse(text, PROGRAMS), det, sd); }
+    if (careHit) { trace.path = "care"; return startCare(text, NLParse.parse(text, PROGRAMS), det); }
+    if (isSentence(text)) { var pd = NLParse.parse(text, PROGRAMS).answers.drug; trace.path = pd ? "medication" : "not_understood"; trace.drug = pd || null; return fromSentence(text); }
+    // Jump to a drug only when what they typed starts one of its names ("ozem", "glargine"), with 3+ letters:
+    // "hi" must not land on "Eohilia".
+    var q = MedsLogic.norm(text);
+    var hits = q.length < 3 ? [] : MedsLogic.searchDrugs(text, PROGRAMS).filter(function (d) { return d.names.some(function (n) { return (" " + n).indexOf(" " + q) >= 0; }); });
+    if (hits.length) { trace.path = "medication"; trace.drug = hits[0].brand; return start(hits[0].brand); }
     // Short phrases with a drug name inside ("I need Eliquis", "help with ozempick")
-    if (NLParse.parse(text, PROGRAMS).answers.drug) return fromSentence(text);
+    var sp = NLParse.parse(text, PROGRAMS).answers.drug;
+    if (sp) { trace.path = "medication"; trace.drug = sp; return fromSentence(text); }
+    trace.path = "not_understood";
     notFound(text);
   }
 
