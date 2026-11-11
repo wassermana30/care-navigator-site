@@ -69,7 +69,7 @@ var SYMPTOMS = [
   { id: "gum-problems", ask: "Are your gums swollen, sore or bleeding?", rx: /gums?/i },
   { id: "jaw-pain", ask: "Do you have jaw pain?", rx: /jaw/i },
   { id: "mouth-sores", ask: "Do you have sores or white patches in your mouth?", rx: /(mouth|canker|cold) sores?|sores? (in|on) (my )?(mouth|lip|tongue)|ulcers? in (my )?mouth|white (patches|spots) (in|on) (my )?(mouth|tongue)/i },
-  { id: "face-swelling", ask: "Is your face, cheek or lips swollen?", rx: /(face|cheek|lip|lips|jaw) (is |are )?swollen|swollen (face|cheek|lip|lips|jaw)|puffy face/i },
+  { id: "face-swelling", ask: "Is your face, cheek or lips swollen?", rx: /(face|cheek|lip|lips|jaw|gums?) (is |are )?(getting |gotten |all |really |so |kind of |kinda |starting to )?(swollen|swelling|swell|puffy|puffing)|swollen (face|cheek|lip|lips|jaw|gums?)|puffy (face|cheeks?|lips?)/i },
 
   // ---- chest and breathing
   { id: "cough", ask: "Do you have a cough?", rx: /cough/i },

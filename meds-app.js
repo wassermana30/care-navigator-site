@@ -137,6 +137,18 @@
     $("chatInput").querySelector(".anyway").onclick = function () { start(text, true); };
   }
 
+  // Longest generic drug name in the text that belongs to 2+ brands: { name, brands }.
+  function genericIn(text) {
+    var t = " " + MedsLogic.norm(text) + " ", best = null;
+    MedsLogic.drugIndex(PROGRAMS).forEach(function (d) {
+      d.names.forEach(function (n) {
+        if (n.length < 6 || n === MedsLogic.norm(d.brand) || t.indexOf(" " + n + " ") < 0) return;
+        if (!best || n.length > best.name.length) best = { name: n, brands: [] };
+        if (best.name === n && best.brands.indexOf(d.brand) < 0) best.brands.push(d.brand);
+      });
+    });
+    return best && best.brands.length > 1 ? { name: best.name, brands: best.brands.sort() } : null;
+  }
   function exactDrug(text) {
     var q = MedsLogic.norm(text);
     return MedsLogic.drugIndex(PROGRAMS).filter(function (d) { return d.names.indexOf(q) >= 0; })[0] || null;
@@ -226,6 +238,36 @@
     var trace = window.GetHelpTrace = { text: text, redFlags: det.redFlags.map(function (f) { return f.id + ":" + f.action; }),
       conditions: det.conditions.map(function (c) { return c.id; }), symptoms: sd.symptoms.slice(), named: (sd.named || []).map(function (n) { return n.id || n; }), path: null, drug: null };
     if (exact && !careHit && !symHit) { trace.path = "medication"; trace.drug = exact.brand; return start(exact.brand); }
+    // A named medicine plus a money problem ("can't afford my Eliquis", "no insurance for his insulin") is a medication
+    // question, even when a condition or symptom is mentioned too. Emergencies still come first.
+    var named = exact ? exact.brand : NLParse.parse(text, PROGRAMS).answers.drug;
+    // A generic name sold under several brands ("insulin glargine"): ask which brand instead of guessing.
+    var generic = !named ? genericIn(text) : null;
+    var realSymptoms = sd.symptoms.filter(function (id) { return id !== "child"; }).length > 0;
+    if (named && !det.redFlags.length && !realSymptoms && /afford|copay|co-pay|cost|price|expensive|pay for|no insurance|uninsured|don'?t have insurance|insurance (won'?t|doesn'?t|wont|dont)|coverage|part d/i.test(text)) {
+      trace.path = "medication"; trace.drug = named;
+      var pp = NLParse.parse(text, PROGRAMS);
+      if (pp.answers.drug) return fromSentence(text);
+      start(named, false, pp); input.value = text; return;
+    }
+    if (generic && !det.redFlags.length && !realSymptoms && /afford|copay|co-pay|cost|price|expensive|pay for|no insurance|uninsured|don'?t have insurance|insurance (won'?t|doesn'?t|wont|dont)|coverage|part d/i.test(text)) {
+      trace.path = "medication"; trace.drug = generic.brands.join("|");
+      var gp = NLParse.parse(text, PROGRAMS);
+      showChat(); me(text); resetUndo();
+      bot("<span data-no-i18n>" + esc(generic.name.replace(/^./, function (c) { return c.toUpperCase(); })) + ": " + esc(generic.brands.join(", ")) + "</span><br>This medicine is sold under more than one brand name. Which one do you take? Check the pharmacy label.");
+      $("chatInput").innerHTML = generic.brands.map(function (b) { return "<button class='ghost' data-b='" + esc(b) + "'>" + esc(b) + "</button>"; }).join(" ") +
+        " <button class='ghost' data-b=''>Not sure</button>";
+      $("chatInput").querySelectorAll("button").forEach(function (b) { b.onclick = function () { start(b.dataset.b || generic.name, !b.dataset.b, gp); input.value = text; }; });
+      return;
+    }
+    if (!det.redFlags.length && !realSymptoms && /\b(bill|billed|collections?|owe|debt|charged)\b/i.test(text) && !named) {
+      trace.path = "bill"; showChat(); me(text); resetUndo();
+      bot("This sounds like a medical bill question. You may qualify for the hospital's financial assistance even after the bill, even if it's in collections, and you have rights while you apply.");
+      $("chatInput").innerHTML = "<button class='ghost' id='toBill'>Get help with a hospital bill</button> <button class='ghost' id='toFight'>Collections and my rights</button>";
+      $("toBill").onclick = function () { showView("patient"); };
+      $("toFight").onclick = function () { if (window.FightUI) FightUI.open("collections"); else showView("fight"); };
+      return;
+    }
     if (symHit) { trace.path = "symptoms"; return startSymptoms(text, NLParse.parse(text, PROGRAMS), det, sd); }
     if (careHit) { trace.path = "care"; return startCare(text, NLParse.parse(text, PROGRAMS), det); }
     if (isSentence(text)) { var pd = NLParse.parse(text, PROGRAMS).answers.drug; trace.path = pd ? "medication" : "not_understood"; trace.drug = pd || null; return fromSentence(text); }
@@ -248,7 +290,10 @@
     return kind === "call988"
       ? "<div class='urgent crisis'><b>If you're thinking about suicide or hurting yourself, call or text 988 now.</b> It's free and open 24/7. If you're in immediate danger, call 911." + srcLink(src) + "</div>"
       : "<div class='urgent emergency'><b>If this is happening now, call 911 or go to the nearest emergency room.</b> Emergency rooms must examine and stabilize you even if you can't pay." +
-        (id === "stroke" ? " Note the time symptoms started." : "") + srcLink(src) + "</div>";
+        (id === "stroke" ? " Note the time symptoms started." : "") +
+        (id === "overdose" ? " Poison Control: <a href='tel:18002221222'>1-800-222-1222</a> (free, 24/7) if the person is awake and breathing. Bring the pill bottle." : "") +
+        (id === "anaphylaxis" ? " If there's an epinephrine auto-injector (EpiPen), use it now." : "") +
+        (id === "infant-fever" ? " A baby 3 months or younger with a temperature of 100.4°F (38°C) or higher needs to be seen right away, even if they seem okay." : "") + srcLink(src) + "</div>";
   }
 
   function startCare(text, parsed, det, aiReply) {
@@ -372,17 +417,22 @@
   function symptomPlan(plan) {
     var res = SymptomLogic.result(C.S, C.duration), top = res.top, u = res.urgency;
     (C.redFlags || []).forEach(function (f) { u = SymptomLogic.RANK[f.action === "call988" ? "crisis" : "emergency"] > SymptomLogic.RANK[u] ? (f.action === "call988" ? "crisis" : "emergency") : u; });
+    // Tooth pain with a swelling face or jaw can be a spreading infection: same day, whatever the best match says.
+    var K = C.S.known, toothy = Object.keys(K).some(function (k) { return K[k] === true && /tooth|dental/.test(k); }) || /tooth|teeth/i.test(C.text || "");
+    if (toothy && K["face-swelling"] === true && SymptomLogic.RANK[u] < SymptomLogic.RANK.today) { u = "today"; res.why.push("Tooth pain with a swollen face or jaw can be a spreading infection, so get seen today."); }
+    var urgentNow = u === "crisis" || u === "emergency";
+    res.emergency = urgentNow && (C.redFlags || []).length > 0;
     var said = Object.keys(C.S.known).filter(function (k) { return C.S.known[k] === true && k !== "child"; }).map(symName);
     var where = (u === "crisis" || u === "emergency") ? URGENCY[u].where : top ? top.where : "A primary care provider or a community health center (they charge based on income).";
     var steps = [];
     if (u === "crisis" || u === "emergency") steps.push(URGENCY[u].where);
     else steps.push((u === "today" ? "Get checked today: " : "Get checked: ") + where);
     steps.push("Tell them your symptoms" + (said.length ? " (" + said.join(", ") + ")" : "") + ", when they started, and what makes them better or worse." +
-      (top ? " Ask: \"Could this be " + top.label.toLowerCase() + "?\"" : ""));
-    if (top && top.seeDoctorIf && top.seeDoctorIf.length) steps.push("Go sooner if: " + top.seeDoctorIf.map(function (x) { return x.replace(/\.$/, ""); }).join("; ") + ".");
+      (top && !urgentNow ? " Ask: \"Could this be " + top.label.toLowerCase() + "?\"" : ""));
+    if (top && !urgentNow && top.seeDoctorIf && top.seeDoctorIf.length) steps.push("Go sooner if: " + top.seeDoctorIf.map(function (x) { return x.replace(/\.$/, ""); }).join("; ") + ".");
     steps.push("Only a doctor can confirm what this is. Ask what tests you need, and what they cost, before they're done.");
     return Object.assign(plan, {
-      urgency: u, urgencyInfo: URGENCY[u], where: where, who: top && top.who && top.who.length ? top.who : ["Primary care provider or community health center"],
+      urgency: u, urgencyInfo: URGENCY[u], where: where, who: urgentNow ? [u === "crisis" ? "988 Suicide & Crisis Lifeline (call or text 988), or 911 if in danger" : "911 or the nearest emergency room"] : top && top.who && top.who.length ? top.who : ["Primary care provider or community health center"],
       steps: steps, meanwhile: (u === "crisis" || u === "emergency") ? [] : (top && top.selfCare) || [], source: top && top.source,
       hospitalBill: plan.hospitalBill || u === "emergency" || u === "today", sym: res
     });
@@ -390,6 +440,8 @@
 
   function causesHtml(res) {
     if (!res.causes.length) return "<div class='card'><h3>What it could be</h3><p>I couldn't narrow it down from what you told me. That doesn't mean it's nothing. A primary care provider or health center can figure it out.</p></div>";
+    if (res.emergency) return "<div class='card causes'><h3>What it could be</h3><p><b>The warning signs you described come first: get emergency care now.</b> " +
+      "Don't wait to figure out the cause. The doctors will check for it.</p><p>Other things that can cause some of these symptoms: " + res.causes.map(function (x) { return esc(x.cond.label); }).join(", ") + ".</p><p>These are for later, not a reason to wait.</p></div>";
     return "<div class='card causes'><h3>What it could be</h3>" +
       "<p class='hint'><b>This is not a diagnosis.</b> These are possible causes that match what you told me. Only a doctor or nurse can tell you what you have, so use this to know what to ask.</p>" +
       res.causes.map(function (x) {

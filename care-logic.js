@@ -2,11 +2,14 @@
 // Pure functions (no page code) so they can be tested.
 
 var CareLogic = (function () {
+  var HISTORY = /\b(had|survived|recovered from|history of|after|since|from) (a |an |my |his |her |their )?(mild |small |minor |big |major )?(stroke|heart attack)s?\b[^.!?]{0,40}?\b(last (year|month|week|spring|summer|fall|winter)|\d+ (years?|months?|weeks?) ago|years? ago|back in|in (19|20)\d\d|a while back|before)\b|\b(history of|previous|prior|old|past) (a )?(stroke|heart attack)s?\b/gi;
   function detect(text) {
     var t = String(text || "");
     if (typeof Lexicon !== "undefined") t = Lexicon.expand(t);  // slang -> plain words
+    // A past event ("I had a stroke back in 2024", "heart attack last year") is history, not an emergency now.
+    var now = t.replace(HISTORY, " ");
     return {
-      redFlags: CARE_RED_FLAGS.filter(function (f) { return f.rx.test(t); }),
+      redFlags: CARE_RED_FLAGS.filter(function (f) { return f.rx.test(f.id === "chest" || f.id === "stroke" ? now : t); }),
       conditions: CONDITIONS.filter(function (c) { return c.rx.test(t); })
     };
   }

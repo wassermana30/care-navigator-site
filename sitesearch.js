@@ -32,26 +32,64 @@ var SiteSearch = (function () {
     (typeof GLOSSARY !== "undefined" ? GLOSSARY : []).forEach(function (g) { add("What it means", g.terms[0], g.terms.join(" ") + " " + g.def, { def: true }, { detail: g.def }); });
     return index;
   }
-  // Every word of the query must appear (as the start of a word) in the title or text. Title hits rank higher.
-  function search(q, limit) {
-    var words = norm(q).split(" ").filter(function (w) { return w.length > 1; });
-    if (!words.length) return [];
-    var out = [];
-    build().forEach(function (e) {
-      var score = 0;
-      for (var i = 0; i < words.length; i++) {
-        var w = words[i], inT = (" " + e.t).indexOf(" " + w) >= 0, inX = (" " + e.x).indexOf(" " + w) >= 0;
-        if (!inT && !inX) return;
-        score += inT ? (e.t.indexOf(w) === 0 ? 0 : 1) : 3;
+  // Common misspellings and words that carry no meaning in a search.
+  var FIX = { deductable: "deductible", deductibel: "deductible", medicade: "medicaid", medicaide: "medicaid", medicad: "medicaid", medicair: "medicare",
+    medicar: "medicare", insurence: "insurance", insurrance: "insurance", insulen: "insulin", perscription: "prescription", prescripton: "prescription",
+    copayment: "copay", obamacare: "marketplace", chip: "chip", dentist: "dentist", hosptial: "hospital", hospitol: "hospital", collection: "collections" };
+  var STOP = { for: 1, my: 1, the: 1, a: 1, an: 1, to: 1, of: 1, and: 1, in: 1, on: 1, with: 1, me: 1, i: 1, is: 1, it: 1, do: 1, how: 1, what: 1, can: 1, get: 1, need: 1, help: 1, about: 1, our: 1, your: 1, we: 1 };
+  var SYN = { kids: "children", kid: "children", child: "children", teeth: "dentist", tooth: "dentist" };
+  function lev(a, b) {  // edit distance, small words only
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    var p = [], i, j; for (j = 0; j <= b.length; j++) p[j] = j;
+    for (i = 1; i <= a.length; i++) { var c = [i]; for (j = 1; j <= b.length; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; }
+    return p[b.length];
+  }
+  function words(q) { return norm(q).split(" ").filter(function (w) { return w.length > 1 && !STOP[w]; }).map(function (w) { return FIX[w] || w; }); }
+  function scoreEntry(e, ws, fuzzy) {
+    var score = 0, missed = 0;
+    for (var i = 0; i < ws.length; i++) {
+      var w = ws[i], alt = SYN[w], inT = (" " + e.t).indexOf(" " + w) >= 0, inX = (" " + e.x).indexOf(" " + w) >= 0;
+      if (!inT && !inX && alt) { inT = (" " + e.t).indexOf(" " + alt) >= 0; inX = (" " + e.x).indexOf(" " + alt) >= 0; }
+      if (!inT && !inX && fuzzy && w.length >= 5) {
+        var near = function (txt) { return txt.split(" ").some(function (x) { return x.length >= 4 && lev(w, x) <= (w.length >= 8 ? 2 : 1); }); };
+        inT = near(e.t); inX = !inT && near(e.x); if (inT || inX) score += 2;
       }
-      if (e.t === norm(q)) score -= 5;
-      out.push({ e: e, score: score });
-    });
+      if (!inT && !inX) { missed++; continue; }
+      score += inT ? (e.t.indexOf(w) === 0 ? 0 : 1) : 3;
+    }
+    return { score: score, missed: missed };
+  }
+  // Every meaningful word must match (as the start of a word) in the title or text; title hits rank higher.
+  // No results? Try again forgiving typos, then allow one unmatched word in longer searches.
+  function search(q, limit) {
+    var ws = words(q);
+    if (!ws.length) return [];
     var ORDER = { "Tool": 0, "Symptom": 1, "Condition": 2, "Medication": 3, "Help program": 4, "Your rights": 5, "Talk to a person": 6, "What it means": 7 };
+    function run(fuzzy, allowMiss) {
+      var out = [];
+      build().forEach(function (e) {
+        var r = scoreEntry(e, ws, fuzzy);
+        if (r.missed > allowMiss) return;
+        var score = r.score + r.missed * 4;
+        if (e.t === norm(q)) score -= 5;
+        out.push({ e: e, score: score });
+      });
+      return out;
+    }
+    var out = run(false, 0);
+    if (!out.length) out = run(true, 0);
+    if (!out.length && ws.length >= 3) out = run(true, 1);
     return out.sort(function (a, b) { return a.score - b.score || ORDER[a.e.kind] - ORDER[b.e.kind] || a.e.title.localeCompare(b.e.title); })
       .slice(0, limit || 40).map(function (x) { return x.e; });
   }
-  return { search: search };
+  // Safety first: emergency or crisis words get 911 / 988 before any search result.
+  function urgent(q) {
+    if (typeof CareLogic === "undefined") return null;
+    var f = CareLogic.detect(q).redFlags;
+    if (!f.length) return null;
+    return f.some(function (x) { return x.action === "call988"; }) ? "call988" : "call911";
+  }
+  return { search: search, urgent: urgent };
 })();
 
 if (typeof document !== "undefined") (function () {
@@ -72,11 +110,15 @@ if (typeof document !== "undefined") (function () {
   function render() {
     var q = input.value.trim();
     if (!q) { res.innerHTML = "<p class='hint'>Try: <i>sore throat</i>, <i>insulin</i>, <i>collections</i>, <i>deductible</i>, <i>Medicaid</i>, <i>dentist</i>.</p>"; return; }
+    var u = SiteSearch.urgent(q);
+    var top = u === "call988"
+      ? "<div class='urgent crisis'><b>If you're thinking about suicide or hurting yourself, call or text 988 now.</b> It's free, private and open 24/7. <a class='primary call' href='tel:988'>Call or text 988</a> If you're in immediate danger, call 911.</div>"
+      : u ? "<div class='urgent emergency'><b>If this is happening now, call 911 or go to the nearest emergency room.</b> <a class='primary call' href='tel:911'>Call 911</a></div>" : "";
     shown = SiteSearch.search(q, 40);
-    if (!shown.length) { res.innerHTML = "<p class='hint'>No matches. Try fewer or different words, or <a href='#' id='ssAsk'>ask Get help</a>.</p>"; document.getElementById("ssAsk").onclick = function (e) { e.preventDefault(); closePanel(); askGetHelp(q); }; return; }
+    if (!shown.length) { res.innerHTML = top + "<p class='hint'>No matches. Try fewer or different words, or <a href='#' id='ssAsk'>ask Get help</a>.</p>"; document.getElementById("ssAsk").onclick = function (e) { e.preventDefault(); closePanel(); askGetHelp(q); }; return; }
     var groups = {}, order = [];
     shown.forEach(function (e, i) { if (!groups[e.kind]) { groups[e.kind] = []; order.push(e.kind); } if (groups[e.kind].length < 6) groups[e.kind].push(i); });
-    res.innerHTML = order.map(function (k) {
+    res.innerHTML = top + order.map(function (k) {
       return "<h3>" + esc(k) + "</h3>" + groups[k].map(function (i) {
         var e = shown[i];
         return "<button type='button' class='ss-item' data-i='" + i + "'><b>" + esc(e.title) + "</b>" + (e.detail ? "<span class='hint'>" + esc(e.detail) + "</span>" : "") + "</button>" +

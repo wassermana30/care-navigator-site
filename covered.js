@@ -5,7 +5,7 @@
 var CoveredLogic = (function () {
   var BAND = 5;  // Medicaid counts 5% of the poverty line off income ("disregard"), so treat +5 points as "maybe".
   function status(pct, limit) { return limit == null ? null : pct <= limit ? "likely" : pct <= limit + BAND ? "maybe" : "no"; }
-  function pctFPL(income, size, cfg) { return Math.round(income / (cfg.FPL.base + cfg.FPL.perAdditional * Math.max(0, size - 1)) * 100); }
+  function pctFPL(income, size, cfg) { return Math.floor(income / (cfg.FPL.base + cfg.FPL.perAdditional * Math.max(0, size - 1)) * 100); }
 
   // input: { state, size, income, kids (bool), pregnant (bool), medicare (bool), savings (number|null), status: "citizen"|"greencard"|"other"|"unsure", today }
   function check(input, cfg, R, M) {
@@ -21,13 +21,13 @@ var CoveredLogic = (function () {
     if (!input.medicare) {
       if (expansion) {
         var lim = R.medicaidAdults.expansionLimitPctFPL;
-        out.push({ id: "medicaid-adult", name: t("Medicaid for adults", "Medicaid para adultos"), status: input.status === "other" ? "no" : status(pct, lim),
+        out.push({ id: "medicaid-adult", name: t("Medicaid for adults", "Medicaid para adultos"), status: input.status === "other" ? "no" : input.status === "greencard" && status(pct, lim) === "likely" ? "maybe" : status(pct, lim),
           why: t(pct + "% of the poverty line. " + st + " expanded Medicaid to adults up to " + lim + "%.", "Está al " + pct + "% del nivel de pobreza. " + st + " amplió Medicaid para adultos hasta el " + lim + "%.") + (immNote ? " " + immNote : ""),
           note: t("Starting January 1, 2027, adults 19 to 64 may need to show 80 hours a month of work, school, volunteering or a work program (or earn about $580 a month) unless they're exempt, and renew every 6 months.",
             "A partir del 1 de enero de 2027, los adultos de 19 a 64 años podrían tener que demostrar 80 horas al mes de trabajo, estudio, voluntariado o un programa de trabajo (o ganar unos $580 al mes), a menos que estén exentos, y renovar cada 6 meses.") });
       } else {
         var parentLimit = M.parents[st];
-        if (input.kids && parentLimit != null) out.push({ id: "medicaid-parent", name: t("Medicaid for parents", "Medicaid para padres"), status: input.status === "other" ? "no" : status(pct, parentLimit),
+        if (input.kids && parentLimit != null) out.push({ id: "medicaid-parent", name: t("Medicaid for parents", "Medicaid para padres"), status: input.status === "other" ? "no" : input.status === "greencard" && status(pct, parentLimit) === "likely" ? "maybe" : status(pct, parentLimit),
           why: t(st + " didn't expand Medicaid. Parents can qualify up to about " + parentLimit + "% of the poverty line; you're at " + pct + "%.",
             st + " no amplió Medicaid. Los padres pueden calificar hasta más o menos el " + parentLimit + "% del nivel de pobreza; usted está al " + pct + "%.") + (immNote ? " " + immNote : "") });
         else if (pct < 100) out.push({ id: "gap", name: t("Medicaid for adults", "Medicaid para adultos"), status: "no",
@@ -47,9 +47,11 @@ var CoveredLogic = (function () {
       note: t("Limits are from the newest official 50-state table (" + (R.children.asOf || "2023") + "). Apply even if you're a little over.",
         "Los límites vienen de la tabla oficial más reciente de los 50 estados (" + (R.children.asOf || "2023") + "). Solicite aunque gane un poco más.") });
     var pg = R.pregnancy[st];
-    if (input.pregnant && pg) out.push({ id: "pregnancy", name: t("Medicaid for pregnancy", "Medicaid para el embarazo"), status: R.uncertainPregnancy && R.uncertainPregnancy.indexOf(st) >= 0 ? "maybe" : status(pct, pg.limitPctFPL),
-      why: t("Pregnant people in " + st + " can qualify up to about " + pg.limitPctFPL + "% of the poverty line; you're at " + pct + "%.",
-        "Las embarazadas en " + st + " pueden calificar hasta más o menos el " + pg.limitPctFPL + "% del nivel de pobreza; usted está al " + pct + "%.") +
+    // Medicaid counts the unborn baby in the household, and adds a 5-point income disregard.
+    var pctP = pctFPL(input.income, input.size + 1, cfg);
+    if (input.pregnant && pg) out.push({ id: "pregnancy", name: t("Medicaid for pregnancy", "Medicaid para el embarazo"), status: R.uncertainPregnancy && R.uncertainPregnancy.indexOf(st) >= 0 ? "maybe" : status(pctP, pg.limitPctFPL + 5),
+      why: t("Pregnant people in " + st + " can qualify up to about " + pg.limitPctFPL + "% of the poverty line (plus a 5% income disregard). Counting the baby, your household is " + (input.size + 1) + " people at " + pctP + "%.",
+        "Las embarazadas en " + st + " pueden calificar hasta más o menos el " + pg.limitPctFPL + "% del nivel de pobreza (más un 5% que no se cuenta). Contando al bebé, su hogar es de " + (input.size + 1) + " personas al " + pctP + "%.") +
         (pg.postpartumMonths ? t(" Coverage lasts " + (pg.postpartumMonths === 12 ? "12 months" : pg.postpartumMonths + " months") + " after the baby is born.", " La cobertura dura " + pg.postpartumMonths + " meses después del parto.") : "") +
         (R.uncertainPregnancy && R.uncertainPregnancy.indexOf(st) >= 0 ? t(" This state's limit may have changed recently, so ask your state Medicaid office.", " El límite de este estado pudo haber cambiado hace poco; pregunte en la oficina de Medicaid de su estado.") : "") });
     // Marketplace
@@ -62,6 +64,7 @@ var CoveredLogic = (function () {
           mk.maxPctFPL != null && pct > mk.maxPctFPL ? t("Above " + mk.maxPctFPL + "% of the poverty line there's no help with premiums in 2026 and 2027. You can still buy a plan.", "Por encima del " + mk.maxPctFPL + "% del nivel de pobreza no hay ayuda con las primas en 2026 y 2027. Igual puede comprar un plan.") :
           t("Between " + mk.minPctFPL + "% and " + mk.maxPctFPL + "% of the poverty line you may get a tax credit that lowers your monthly premium.", "Entre el " + mk.minPctFPL + "% y el " + mk.maxPctFPL + "% del nivel de pobreza podría recibir un crédito fiscal que baja su prima mensual."),
         note: t("Sign up for 2027 from November 1, 2026 to January 15, 2027 (by December 15 to start January 1). ", "Inscríbase para 2027 del 1 de noviembre de 2026 al 15 de enero de 2027 (antes del 15 de diciembre para empezar el 1 de enero). ") +
+          (input.status === "greencard" ? t("If you've had your green card less than 5 years and can't get Medicaid yet, you can still get these Marketplace savings. ", "Si tiene su green card hace menos de 5 años y todavía no puede recibir Medicaid, igual puede recibir estos ahorros del Marketplace. ") : "") +
           (input.status === "other" ? t("Starting January 1, 2027, premium savings are limited to green card holders, Cuban or Haitian entrants and COFA migrants. Others can still buy a plan at full price.",
             "A partir del 1 de enero de 2027, los ahorros en la prima se limitan a personas con green card, participantes cubanos o haitianos y migrantes COFA. Los demás pueden comprar un plan a precio completo.") : ""),
         url: mk.url, phone: mk.phone });
@@ -111,6 +114,14 @@ if (typeof document !== "undefined") (function () {
   document.getElementById("gcGo").onclick = function () {
     var inc = document.getElementById("gcIncome").value, size = +document.getElementById("gcSize").value || 1;
     if (inc === "" || +inc < 0) { document.getElementById("gcOut").innerHTML = "<p class='warn'>Enter your household's yearly income (0 is fine).</p>"; return; }
+    var out = document.getElementById("gcOut");
+    if (+inc > 0 && +inc < 6000 && !out.dataset.lowOk) {
+      out.innerHTML = "<div class='card'><p>You entered <b>$" + (+inc).toLocaleString() + " a year</b>. Is that your income for the whole year, or for one month?</p><div class='row-actions'>" +
+        "<button class='primary' id='gcMonthly'>That's per month ($" + (+inc * 12).toLocaleString() + " a year)</button> <button class='ghost' id='gcYearly'>That's for the whole year</button></div></div>";
+      document.getElementById("gcMonthly").onclick = function () { document.getElementById("gcIncome").value = +inc * 12; out.dataset.lowOk = "1"; document.getElementById("gcGo").click(); delete out.dataset.lowOk; };
+      document.getElementById("gcYearly").onclick = function () { out.dataset.lowOk = "1"; document.getElementById("gcGo").click(); delete out.dataset.lowOk; };
+      return;
+    }
     var sv = document.getElementById("gcSavings").value;
     var r = CoveredLogic.check({ state: document.getElementById("gcState").value, size: size, income: +inc, kids: document.getElementById("gcKids").checked,
       pregnant: document.getElementById("gcPreg").checked, medicare: document.getElementById("gcMedicare").checked, savings: sv === "" ? null : +sv,

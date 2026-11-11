@@ -8,7 +8,7 @@ var Lexicon = (function () {
   var WHO = "(my|his|her|their|the|our|[a-z]+'?s)";  // also "son's", "sons", "mom's"
   var RULES = [
     // ---- emergencies (always map to the emergency wording) ----
-    [/\b(unalive|kms|kill my ?self|better off dead|end it all|don'?t want to (be here|live|wake up)( anymore)?|wanna die|want to disappear forever|no reason to live|(better|be) off without me|no point (in )?(living|going on)|can'?t go on( anymore)?|thinking about killing)\b/i, " want to end my life "],
+    [/\b(unalive|kms|kill my ?self|better off dead|end it all|(go to sleep|fall asleep|sleep) and (just )?(not|never) wake up|not (want to |wanna )?wake up|nothing matters( anymore| to me)?(?! (more|as much|but))|nobody (would|will|'?d) (even )?(notice|care|miss me)|no ?one (would|will|'?d) (even )?(notice|care|miss me)|if i (was|were) gone|if i (wasn'?t|weren'?t) (here|around)( anymore)?|(so )?done with (everything|life|it all)|wish i (was|were) (dead|gone|never born)|wish i (wasn'?t here|didn'?t exist)|don'?t want to (be here|live|wake up)( anymore)?|wanna die|want to disappear forever|no reason to live|(better|be) off without me|no point (in )?(living|going on)|can'?t go on( anymore)?|thinking about killing)\b/i, " want to end my life "],
     [/\b(od'?d|o\.d\.?|overdosed|took a bunch of pills|took too much)\b/i, " overdose "],
     [/\b(can'?t catch (my|his|her) breath|gasping|can'?t get air|struggling to breathe)\b/i, " trouble breathing "],
     [/\b((clutching|grabbing|holding|gripping) (my|his|her|their) chest|elephant (sitting )?on (my|his|her) chest|chest (is )?(killing|crushing)|squeez\w* (in|on) (my|his|her) chest)\b/i, " chest pain "],

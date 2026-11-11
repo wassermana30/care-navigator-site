@@ -151,6 +151,9 @@ function renderResults() {
     html += "<h3>Deadlines</h3><ul class='list'>" +
       "<li>Apply by <b>" + dl.applyBy + "</b> (" + (dl.daysLeft >= 0 ? dl.daysLeft + " days left" : Math.abs(dl.daysLeft) + " days ago") + "). The hospital must accept applications for at least 240 days after your first bill.</li>" +
       "<li>" + (dl.collectionsPossible ? "The hospital is now allowed to send the bill to collections or report it to credit agencies. Applying puts those actions on hold while your application is reviewed." : "The hospital cannot send this to collections or credit agencies before <b>" + dl.collectionsAllowedFrom + "</b>.") + "</li></ul>";
+  } else if (!r.planAhead && r.coverage && r.coverage.status === "no" && a.firstBillDate) {
+    html += "<h3>Deadlines</h3><p>501(r)'s 240-day application window doesn't apply to this hospital. Apply as soon as you can, and ask billing for their deadline in writing." +
+      (r.policy && r.policy.law ? " Your state's rule is in the notes below." : "") + "</p>";
   } else if (!r.planAhead) {
     html += "<h3>Deadlines</h3><p class='hint'>Add the date of your first bill to see your deadline.</p>";
   }

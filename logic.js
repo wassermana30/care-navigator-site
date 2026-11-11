@@ -144,7 +144,30 @@ var NavLogic = (function () {
     else if (law.uninsuredOnly && a.insurance && a.insurance !== "none") why = "This law covers uninsured patients only.";
     else if (law.nonprofitOnly && a.hospitalType && a.hospitalType !== "nonprofit" && a.hospitalType !== "unsure") why = "This law covers nonprofit hospitals only.";
     if (why) return { source: "state-info", free: null, discount: null, label: a.state + " law: " + law.law, law: law, why: why };
-    return { source: "state", free: law.freeCareUpToPctFPL || null, discount: law.discountUpToPctFPL || null, label: a.state + " law: " + law.law, law: law };
+    var st = stateTiers(law);
+    return { source: "state", free: st.free, discount: st.discount, tiers: st.tiers, tierNote: st.note, label: a.state + " law: " + law.law, law: law };
+  }
+  // A state law's tiers, written as text ("patient pays 20% of the bill", "minimum 75% discount"), as numbers the screen can use.
+  // Washington has two hospital tiers. We don't know which tier each hospital is in, so we use the smaller Tier 2
+  // benefits (never promise too much) and say Tier 1 hospitals give more.
+  function stateTiers(law) {
+    var rows = law.tiers || [], note = null;
+    if (rows.some(function (t) { return /^Tier 2 hospitals/.test(t.benefit || ""); })) {
+      rows = rows.filter(function (t) { return /^Tier 2 hospitals/.test(t.benefit || ""); });
+      note = "Washington has two hospital tiers. Hospitals in a system of 3 or more Washington hospitals (Tier 1) must give more: free care up to 300% of the poverty line and discounts up to 400%. These results use the smaller Tier 2 rules. Ask the hospital which tier it is.";
+    }
+    var tiers = [], free = null, discount = null;
+    rows.forEach(function (t) {
+      var b = String(t.benefit || ""), m, pct = null;
+      if (/\bfree\b|100% (charitable )?discount|all charges waived/i.test(b) && !/sliding/i.test(b)) pct = 100;
+      else if ((m = b.match(/patient pays (\d+)%/i))) pct = 100 - +m[1];
+      else if ((m = b.match(/(?:minimum |at least )?(\d+)% discount|reduced at least (\d+)%/i))) pct = +(m[1] || m[2]);
+      if (pct === null || !t.maxPctFPL) return;
+      tiers.push({ upToPctFPL: t.maxPctFPL, discountPct: pct });
+      if (pct === 100) free = Math.max(free || 0, t.maxPctFPL); else discount = Math.max(discount || 0, t.maxPctFPL);
+    });
+    if (!tiers.length) return { free: law.freeCareUpToPctFPL || null, discount: law.discountUpToPctFPL || null, tiers: [], note: null };
+    return { free: free, discount: discount || (free ? null : law.discountUpToPctFPL || null), tiers: tiers, note: note };
   }
   function num(v) { var n = parseFloat(v); return isNaN(n) || n <= 0 ? null : n; }
 
@@ -169,7 +192,14 @@ var NavLogic = (function () {
       else if (out.policy) { out.tier = { label: "Above the " + (out.policy.source === "state" ? "state's" : "hospital's") + " income limit", discount: 0, above: true }; }
       if (out.tier && out.tier.discount) out.estimatedSavings = Math.round((Number(a.billAmount) || 0) * out.tier.discount / 100);
     }
-    out.deadlines = a.timing !== "before" && a.firstBillDate ? deadlines(a.firstBillDate, today, cfg.RULES_501R) : null;
+    // The 240-day window is a 501(r) rule. When 501(r) doesn't apply (for-profit hospital), use the state law's own window instead.
+    var no501r = out.coverage.status === "no";
+    out.deadlines = a.timing !== "before" && a.firstBillDate && !no501r ? deadlines(a.firstBillDate, today, cfg.RULES_501R) : null;
+    if (no501r && out.policy && out.policy.law) {
+      var win = (out.policy.law.otherKeyRules || []).filter(function (x) { return /apply|application/i.test(x) && /\d+ (year|month|day)/i.test(x); })[0];
+      if (win) out.warnings.push(a.state + " law: " + win);
+    }
+    if (out.policy && out.policy.tierNote) out.warnings.push(out.policy.tierNote);
     out.planAhead = a.timing === "before" ? planAhead(a, today) : null;
     if (out.deadlines && out.deadlines.daysLeft < 0)
       out.warnings.push("The 240-day minimum window has passed. Apply anyway: many hospitals accept late applications, and 501(r) is only the minimum.");

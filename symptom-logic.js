@@ -18,6 +18,7 @@ var SymptomLogic = (function () {
   // Symptoms mentioned, and conditions named outright ("I think I have strep").
   // "no cough", "without a fever", "I don't have a rash" count as a no, not a yes.
   var NEG = /\b(no|not|without|never|don'?t have|doesn'?t have|haven'?t had|didn'?t have|isn'?t|aren'?t)\b[^.,;!?]{0,14}$/i;
+  var PAST = /\b(had|survived|recovered from|history of|after|since|from) (a |an |my |his |her |their )?(mild |small |minor |big |major )?[a-z' -]{3,30}?\b[^.!?]{0,40}?\b(last (year|month|week|spring|summer|fall|winter)|\d+ (years?|months?|weeks?) ago|years? ago|back in|in (19|20)\d\d|a while back)\b|\b(history of|previous|prior|old|past) [a-z' -]{3,30}?\b(?=[,.;!?]|$| and | but )/gi;
   function detect(text) {
     var t = expand(text), yes = [], no = [];
     SYMPTOMS.forEach(function (s) {
@@ -27,7 +28,7 @@ var SymptomLogic = (function () {
     });
     return {
       symptoms: yes, negated: no,
-      named: namedIn(t)
+      named: namedIn(t.replace(PAST, " "))  // "had a heart attack last year" is history, not what's happening now
     };
   }
 

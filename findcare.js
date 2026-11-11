@@ -42,6 +42,7 @@ if (typeof document !== "undefined") (function () {
 
   function render(zip) {
     var out = document.getElementById("fcResults");
+    var z = String(zip).match(/^\s*(\d{5})(?:[-\s]?\d{4})?\s*$/); if (z) zip = z[1];  // ZIP+4 is fine
     if (!/^\d{5}$/.test(zip)) { out.innerHTML = "<p class='warn'>Type a 5-digit ZIP code.</p>"; return; }
     out.innerHTML = "<p class='hint'>Looking…</p>";
     ensure().then(function () {

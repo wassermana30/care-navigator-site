@@ -62,10 +62,14 @@ if (typeof document !== "undefined") (function () {
     gfe: { title: "Bill is more than my Good Faith Estimate", body: function (d) {
       return "I am writing about account number " + d.acct + " for care on " + d.dos + ".\n\n" +
         "I was uninsured (or self-pay) and received a Good Faith Estimate of " + d.est + ". The bill I received is " + d.amt + ", which is " + d.over + " more than the estimate.\n\n" +
-        "I am asking you to correct the bill to match the estimate. If you do not, I plan to start the federal patient-provider dispute resolution process. " +
+        "I am asking you to correct the bill to match the estimate. " + (d.underThreshold ? "Please also send me an itemized bill, and tell me about any financial assistance or payment plan you offer. " : "If you do not, I plan to start the federal patient-provider dispute resolution process. ") +
         "Please do not send this bill to collections or add late fees while this is being resolved. I can be reached at " + d.contact + ".";
     } },
     surprise: { title: "Surprise bill protected by the No Surprises Act", body: function (d) {
+      if (d.groundAmbulance) return "I am writing about account number " + d.acct + " for ambulance services on " + d.dos + ".\n\n" +
+        "I did not choose this ambulance provider. Please send me an itemized bill, bill my insurance at the in-network rate if you have not, and tell me about any " +
+        "financial assistance, discount or payment plan you offer. If my state protects patients from surprise ambulance bills, please apply that protection.\n\n" +
+        "Please do not send this bill to collections while we resolve it. I can be reached at " + d.contact + ".";
       return "I am writing about account number " + d.acct + " for care on " + d.dos + ".\n\n" +
         "I believe this bill is protected by the federal No Surprises Act. I should only owe my in-network cost-sharing (copay, coinsurance or deductible). " +
         "Please correct the bill, or explain in writing why the protection does not apply.\n\n" +
@@ -116,7 +120,8 @@ if (typeof document !== "undefined") (function () {
         ok = g.enoughOver;
         calc = "<div class='card prog " + (g.enoughOver && g.inTime !== false ? "likely" : "no") + "'><h3>" + (g.enoughOver ? "You can likely dispute this bill" : "Under the $" + g.threshold + " limit") + "</h3>" +
           "<p>The bill is <b>" + money(g.over) + "</b> over the estimate. Disputes need at least $" + g.threshold + ".</p>" +
-          (g.deadline ? "<p>Start the dispute by <b>" + g.deadline + "</b>" + (g.daysLeft !== null ? " (" + (g.daysLeft >= 0 ? g.daysLeft + " days left" : "that was " + Math.abs(g.daysLeft) + " days ago") + ")" : "") + ". It costs $" + g.fee + ", and you get it back off the bill if you win.</p>" : "<p class='hint'>Add the date of the first bill to see your deadline.</p>") + "</div>";
+          (!g.enoughOver ? "<p>Under $" + g.threshold + " over, the federal dispute process isn't available. You can still ask the provider to honor the estimate, request an itemized bill, ask for financial assistance, or set up a payment plan.</p>" :
+          g.deadline ? "<p>Start the dispute by <b>" + g.deadline + "</b>" + (g.daysLeft !== null ? " (" + (g.daysLeft >= 0 ? g.daysLeft + " days left" : "that was " + Math.abs(g.daysLeft) + " days ago") + ")" : "") + ". It costs $" + g.fee + ", and you get it back off the bill if you win.</p>" : "<p class='hint'>Add the date of the first bill to see your deadline.</p>") + "</div>";
       }
       if (s.calc === "timeline" && val("fbBillDate")) {
         var tl = FightLogic.timeline(val("fbBillDate"), today(), F["501r-timeline"]);
@@ -124,11 +129,14 @@ if (typeof document !== "undefined") (function () {
           "<li>No harsh collection steps before <b>" + tl.noHarshStepsBefore + "</b>" + (tl.harshStepsAllowedNow ? " (that date has passed)" : "") + ".</li>" +
           "<li>You can apply for financial assistance until at least <b>" + tl.applyBy + "</b>" + (tl.daysToApply >= 0 ? " (" + tl.daysToApply + " days left)" : " (passed, but apply anyway: many hospitals accept late applications)") + ".</li></ul></div>";
       }
+      if (s.id === "surprise" && /ambulance|\bems\b|paramedic/i.test(val("fbProv")) && !/air ambulance|helicopter|air ?med/i.test(val("fbProv")))
+        calc += "<div class='card prog maybe'><h3>Ground ambulance bills aren't covered by the No Surprises Act</h3><p>The federal law protects you from surprise air ambulance bills, but not ground ambulances. Some states have their own protections. Your letter asks for an itemized bill, the in-network rate, and financial help instead.</p></div>";
       document.getElementById("fbCalc").innerHTML = calc;
-      var dd = { acct: val("fbAcct") || "[account number]", dos: val("fbDos") || "[date of care]", amt: amt ? money(amt) : "[amount]", est: val("fbEst") ? money(+val("fbEst")) : "[estimate]",
+      var dd = { underThreshold: !!(+val("fbEst") && amt && amt - +val("fbEst") < +((F["ppdr-dispute"].numbers || {}).threshold_usd || 400)),
+        groundAmbulance: /ambulance|\bems\b|paramedic/i.test(val("fbProv")) && !/air ambulance|helicopter|air ?med/i.test(val("fbProv")), acct: val("fbAcct") || "[account number]", dos: val("fbDos") || "[date of care]", amt: amt ? money(amt) : "[amount]", est: val("fbEst") ? money(+val("fbEst")) : "[estimate]",
         over: val("fbEst") ? money(amt - +val("fbEst")) : "[amount]", monthly: val("fbMonthly") ? money(+val("fbMonthly")) : "[amount]", contact: val("fbContact") || "[phone or email]" };
       var text = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) + "\n\nTo: Billing Office, " + (val("fbProv") || "[hospital or provider]") +
-        "\nRe: " + L.title + "\n\n" + L.body(dd) + "\n\nThank you,\n" + (val("fbName") || "[your name]");
+        "\nRe: " + (dd.groundAmbulance && s.id === "surprise" ? "Request for an itemized ambulance bill and financial help" : L.title) + "\n\n" + L.body(dd) + "\n\nThank you,\n" + (val("fbName") || "[your name]");
       document.getElementById("fbLetter").innerHTML = "<div class='card'><h3>Your letter <span class='hint'>(edit anything before you send it)</span></h3>" +
         "<textarea id='fbText' class='letter' rows='16' style='width:100%'>" + esc(text) + "</textarea>" +
         "<p class='hint'>Send it by mail or the hospital's patient portal, and keep a copy. Sending by certified mail gives you proof it arrived.</p>" +

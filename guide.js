@@ -10,13 +10,15 @@ var Guide = (function () {
   };
   function a(type, query, label) { return { type: type, label: label || ACT[type], query: query || null }; }
   var RULES = [
+    [/\b(refuse|refusing|turn (me )?away|won'?t (see|treat|take)|deny|denied|not (see|treat)|kick(ed)? me out)\b[\s\S]{0,60}\b(owe|debt|bill|unpaid|money|pay)|\b(owe|debt|bill|unpaid)\b[\s\S]{0,60}\b(refuse|turn (me )?away|won'?t (see|treat)|deny|denied)\b/i,
+      "In an emergency, a hospital with an ER must check you and stabilize you even if you owe it money or can't pay (federal EMTALA law). A nonprofit hospital also can't delay or deny needed care over old unpaid bills until it has given you a chance to apply for financial assistance (IRS 501(r) rules on collection actions).", ["fight_bill", "hospital_bill"]],
+    [/pregnan/i, "Pregnancy care can be covered by Medicaid even at higher incomes, and losing other coverage lets you sign up for a Marketplace plan outside open enrollment. Someone under 26 may also be able to stay on a parent's plan. Let's check.", ["coverage", "find_care"]],
     [/\b(bill|charged|charge|invoice|owe)\b.*\b(wrong|mistake|error|don'?t (recognize|understand)|itemi[sz]ed)\b|\bitemi[sz]ed\b/i, "Let's check that bill for mistakes. You have a right to an itemized bill.", ["fight_bill"]],
     [/collections?|debt collector|credit (report|score)|sued|lawsuit|garnish/i, "If a medical bill is in collections, you still have rights, and you may still qualify for financial help.", ["fight_bill", "hospital_bill"]],
     [/surprise|out[- ]of[- ]network|estimate|good faith/i, "Surprise bills and bills far above an estimate can often be disputed.", ["fight_bill"]],
     [/hospital|er bill|emergency room bill|surgery|operation|\bbill\b|can'?t (afford|pay)/i, "Hospitals often give free or discounted care to people who can't afford it, even after the bill.", ["hospital_bill", "fight_bill"]],
     [/insurance|insured|medicaid|medi-?cal|chip|marketplace|obamacare|coverage|medicare/i, "Let's see which health coverage you may qualify for.", ["coverage"]],
     [/dentist|dental|tooth|teeth|clinic|doctor near|near me|zip|cheap doctor|low[- ]cost/i, "Community health centers see people with or without insurance and charge by income.", ["find_care"]],
-    [/pregnan/i, "Pregnancy care can be covered by Medicaid even at higher incomes. Let's check.", ["coverage", "find_care"]],
     [/my plan|saved|deadline|remind/i, "Your saved plans and deadlines are in My plan.", ["my_plan"]],
     [/talk|call|person|human|someone|phone|help line|211|lawyer|legal/i, "Here are free phone lines with real people.", ["talk_to_person"]]
   ];
@@ -33,6 +35,16 @@ var Guide = (function () {
     var drug = typeof NLParse !== "undefined" && typeof PROGRAMS !== "undefined" ? NLParse.parse(t, PROGRAMS).answers.drug : null;
     var sd = typeof SymptomLogic !== "undefined" ? SymptomLogic.detect(t) : { symptoms: [], named: [] };
     var bill = /bill|charge|collect|owe|afford|pay\b|insurance|coverage|medicaid|medicare|clinic|dentist|near me/i.test(t);
+    var money = /insurance|insured|coverage|medicaid|medi-?cal|chip|marketplace|kicked off|lost (her|his|my|our) (plan|coverage)/i.test(t);
+    // "Pregnant and lost our insurance" is a coverage question, not a symptom.
+    if (money && /pregnan/i.test(t)) {
+      sd = { symptoms: sd.symptoms.filter(function (x) { return !/pregnan|missed-period|child/.test(x); }), named: (sd.named || []).filter(function (x) { return !/pregnan/.test(x.id || x); }) };
+      det = { redFlags: det.redFlags, conditions: det.conditions.filter(function (c) { return c.id !== "pregnancy"; }) };
+    }
+    // Swollen face or jaw with tooth pain or trouble opening the mouth: a spreading infection needs care today.
+    if (/\b(jaw|face|cheek|neck|gum)\b[^.!?]{0,25}\b(swell\w*|swollen|puffy|puffing)/i.test(t) && /tooth|teeth|jaw|can'?t open|swallow|dentist|abscess/i.test(t))
+      return { urgent: "today", reply: "A swollen face or jaw with tooth pain can be a spreading infection. Get seen today by a dentist or urgent care. Go to the ER now if it's hard to swallow or breathe, or you have a high fever.",
+        actions: [a("find_care", null, "Find a low-cost clinic or dentist"), a("symptoms", t), a("talk_to_person")] };
     if (drug) out.push({ reply: "I can look for free and discount programs for " + drug + ".", actions: [a("medication", drug)] });
     if ((sd.symptoms.filter(function (s) { return s !== "child"; }).length || sd.named.length || (det.conditions.length && !drug)) && !(bill && !sd.symptoms.length))
       out.push({ reply: "Let's figure out how urgent this is and where to go. The symptom checker will ask a few questions.", actions: [a("symptoms", t)] });

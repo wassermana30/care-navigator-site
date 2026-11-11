@@ -8,6 +8,13 @@ var HospitalSearch = (function () {
   var TYPE = { np: "nonprofit", gov: "government", fp: "forprofit", phys: "forprofit", other: "unsure" };
   var LABEL = { np: "nonprofit", gov: "government / public", fp: "for-profit", phys: "physician-owned (for-profit)", other: "other" };
 
+  var GENERIC = { hospital: 1, hosptial: 1, hospitol: 1, medical: 1, center: 1, centre: 1, health: 1, regional: 1, memorial: 0, the: 1, of: 1, general: 1, clinic: 1, system: 1 };
+  function lev(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    var p = [], i, j; for (j = 0; j <= b.length; j++) p[j] = j;
+    for (i = 1; i <= a.length; i++) { var c = [i]; for (j = 1; j <= b.length; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; }
+    return p[b.length];
+  }
   function norm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); }
 
   // Every query word must appear in the name, city or state; names that start with the query rank first.
@@ -23,21 +30,32 @@ var HospitalSearch = (function () {
       }
     });
     var words = q.split(" ");
-    HOSPITALS.forEach(function (h) {
-      var hay = norm(h[0] + " " + h[1] + " " + h[2]);
-      if (words.every(function (w) { return hay.indexOf(w) >= 0; })) {
-        var n = norm(h[0]);
-        hits.push({ h: h, score: n.indexOf(q) === 0 ? 0 : n.indexOf(q) > 0 ? 1 : 2 });
-      }
-    });
+    function scan(ws, fuzzy, penalty) {
+      HOSPITALS.forEach(function (h) {
+        var hay = norm(h[0] + " " + h[1] + " " + h[2]), hw = hay.split(" ");
+        if (ws.every(function (w) { return hay.indexOf(w) >= 0 || (fuzzy && w.length >= 5 && hw.some(function (x) { return lev(w, x) <= (w.length >= 7 ? 2 : 1); })); })) {
+          var n = norm(h[0]);
+          hits.push({ h: h, score: penalty + (n.indexOf(q) === 0 ? 0 : n.indexOf(q) > 0 ? 1 : 2) });
+        }
+      });
+    }
+    scan(words, false, 0);
+    // Nothing? Forgive typos ("hosptial", "methodst"), then ignore generic words ("hospital", "medical center").
+    if (!hits.length) scan(words, true, 3);
+    var core = words.filter(function (w) { return !GENERIC[w]; });
+    if (!hits.length && core.length && core.length < words.length) scan(core, true, 5);
     var seen = {};
     return hits.sort(function (a, b) { return a.score - b.score || a.h[0].localeCompare(b.h[0]); })
       .filter(function (x) { if (seen[x.h[4]]) return false; seen[x.h[4]] = 1; return true; })
       .slice(0, limit || 8);
   }
 
+  // Medicare's ownership code is sometimes out of date. HCA Healthcare is a for-profit company, so its hospitals aren't 501(r) hospitals.
+  function forProfitSystem(name) { return /^hca /i.test(name) ? "HCA Healthcare" : null; }
   function describe(h) {
-    var code = h[3];
+    var code = h[3], fps = forProfitSystem(h[0]);
+    if (fps && code === "np") return { formType: "forprofit", label: "for-profit (" + fps + ")", corrected: true,
+      note: "Medicare's list says nonprofit, but this hospital is run by " + fps + ", a for-profit company, so 501(r) doesn't apply. Many for-profit hospitals still offer charity care, so ask the billing office for their financial assistance policy." };
     return {
       formType: TYPE[code] || "unsure", label: LABEL[code] || code,
       note: code === "np" ? "Nonprofit, so 501(r) applies. It must have a financial assistance policy and post it."
@@ -63,7 +81,12 @@ if (typeof document !== "undefined") {
       input.dataset.inArea = "";
       var hits = HospitalSearch.search(input.value);
       info.textContent = "";
-      if (!hits.length) { box.classList.add("hidden"); return; }
+      if (!hits.length) {
+        box.classList.add("hidden"); box.innerHTML = "";  // no stale suggestions from an earlier search
+        if (input.value.trim().length >= 3 && typeof HOSPITALS !== "undefined")
+          info.textContent = "No hospital found with that name. Check the spelling, or try just the main name and the city (for example \"Parkland Dallas\").";
+        return;
+      }
       box.innerHTML = hits.map(function (x, i) {
         return "<button type='button' data-i='" + i + "'>" + esc(x.h[0]) + (x.alias ? " <span class='hint'>(" + esc(x.alias.replace(/\b\w/g, function (c) { return c.toUpperCase(); })) + ")</span>" : "") +
           " <span class='hint'>· " + esc(x.h[1]) + ", " + esc(x.h[2]) + " · " + esc(HospitalSearch.describe(x.h).label) + "</span></button>";

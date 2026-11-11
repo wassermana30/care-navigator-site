@@ -179,6 +179,19 @@ var MedsLogic = (function () {
       r = Object.assign({}, r, { maybeReason: null });
       reasons = reasons.filter(function (x) { return x.indexOf("Income rule:") !== 0; });  // the state's real rule replaces the generic one
     }
+    // Children's coverage (CHIP): use the state's real child income limit once we know state, household and income.
+    var pctNow = a.householdSize && a.income !== undefined ? a.income / fpl(a.householdSize, cfg) * 100 : null;  // unrounded
+    var KIDS = typeof COVERED_RULES !== "undefined" && COVERED_RULES.children ? COVERED_RULES.children : null;
+    if (p.id === "chip" && KIDS && a.state && KIDS[a.state] && pctNow !== null) {
+      var lim = KIDS[a.state].limitPctFPL;
+      // Still "maybe": we don't know if there are children in the household. Give the state's real limit as the reason.
+      r = Object.assign({}, r, { maybeReason: null });
+      downgrade("maybe", "For children and teens under 19. Children in " + a.state + " qualify up to about " + lim + "% of the poverty line; your household is at " + Math.floor(pctNow) + "%." + (pctNow <= lim + 5 ? " Apply for any children under 19." : " Apply anyway if you're close."));
+    }
+    // Marketplace savings need income of at least 100% of the poverty line. Below that, in a state that didn't expand
+    // Medicaid, adults fall in the "coverage gap": no Medicaid and no premium help.
+    if (p.id === "marketplace-sep" && pctNow !== null && pctNow < 100 && a.state && typeof MEDICAID_STATES !== "undefined" && MEDICAID_STATES.expansion && MEDICAID_STATES.expansion[a.state] === false)
+      downgrade("maybe", "Your income is under 100% of the poverty line and " + a.state + " didn't expand Medicaid, so Marketplace premium help isn't available (the \"coverage gap\"). Children and pregnant people can still get Medicaid, and community health centers and hospital financial assistance can help. If you expect to earn a little more this year, use that projected income.");
     if (r.maybeReason) downgrade("maybe", r.maybeReason);
 
     if (r.needsCommercialDenial && a.insurance === "commercial" && a.commercialDenied === false)

@@ -29,6 +29,8 @@ var NLParse = (function () {
   var MONEY = "\\$?\\s?(\\d[\\d,]*(?:\\.\\d+)?\\s?(?:k|grand|thousand)?)";
 
   function parseIncome(t, notes) {
+    // Amounts that are costs, not income: "my copay is like 150 a month", "rent is $900 a month", "the bill is $4,000"
+    t = t.replace(/\b(co-?pays?|premiums?|deductibles?|bills?|rent|costs?|charges?|owe|out of pocket|price)\b[^.!?;]{0,25}?\$?\d[\d,.]*\s*k?(\s*(a|per|each|every|\/)\s*(month|week|year|mo|yr|fill|refill))?/gi, " ");
     // "$15 an hour, 30 hours a week"
     var h = t.match(new RegExp(MONEY + "\\s*(?:an|per|/|a)\\s*(?:hour|hr)\\b(?:[^.]*?(\\d+)\\s*hours?\\s*(?:a|per)\\s*week)?", "i"));
     if (h) {
