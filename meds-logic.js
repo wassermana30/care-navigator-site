@@ -81,7 +81,8 @@ var MedsLogic = (function () {
 
   function coversDrug(p, brand) {
     var b = norm(brand);
-    return (p.drugs || []).some(function (d) { return norm(parseDrug(d).brand) === b; });
+    // A brand name, or a generic name like "insulin glargine" (covers every brand of it the program lists).
+    return (p.drugs || []).some(function (d) { var pd = parseDrug(d); return norm(pd.brand) === b || pd.names.indexOf(b) > 0; });
   }
 
   function excludesDrug(p, brand) {

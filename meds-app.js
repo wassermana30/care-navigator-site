@@ -257,7 +257,7 @@
       bot("<span data-no-i18n>" + esc(generic.name.replace(/^./, function (c) { return c.toUpperCase(); })) + ": " + esc(generic.brands.join(", ")) + "</span><br>This medicine is sold under more than one brand name. Which one do you take? Check the pharmacy label.");
       $("chatInput").innerHTML = generic.brands.map(function (b) { return "<button class='ghost' data-b='" + esc(b) + "'>" + esc(b) + "</button>"; }).join(" ") +
         " <button class='ghost' data-b=''>Not sure</button>";
-      $("chatInput").querySelectorAll("button").forEach(function (b) { b.onclick = function () { start(b.dataset.b || generic.name, !b.dataset.b, gp); input.value = text; }; });
+      $("chatInput").querySelectorAll("button").forEach(function (b) { b.onclick = function () { start(b.dataset.b || generic.name, false, gp); input.value = text; }; });
       return;
     }
     if (!det.redFlags.length && !realSymptoms && /\b(bill|billed|collections?|owe|debt|charged)\b/i.test(text) && !named) {
@@ -439,6 +439,7 @@
   }
 
   function causesHtml(res) {
+    if (res.emergency && !res.causes.length) return "<div class='card causes'><h3>What it could be</h3><p><b>The warning signs you described come first: get emergency care now.</b> Don't wait to figure out the cause. The doctors will check for it.</p></div>";
     if (!res.causes.length) return "<div class='card'><h3>What it could be</h3><p>I couldn't narrow it down from what you told me. That doesn't mean it's nothing. A primary care provider or health center can figure it out.</p></div>";
     if (res.emergency) return "<div class='card causes'><h3>What it could be</h3><p><b>The warning signs you described come first: get emergency care now.</b> " +
       "Don't wait to figure out the cause. The doctors will check for it.</p><p>Other things that can cause some of these symptoms: " + res.causes.map(function (x) { return esc(x.cond.label); }).join(", ") + ".</p><p>These are for later, not a reason to wait.</p></div>";
@@ -469,7 +470,7 @@
       "<div class='urgent " + cls + " big-urgent'><div class='u-label'>" + esc(plan.urgencyInfo.label) + "</div>" + esc(plan.where) + "</div>" +
       (plan.sym ? causesHtml(plan.sym) : "") +
       "<div class='care-grid'>" +
-        "<div class='card'><h3>Who to see</h3><ul class='list'>" + plan.who.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul></div>" +
+        "<div class='card'><h3>Who to see</h3><ul class='list'>" + ((plan.urgency === "emergency" || plan.urgency === "crisis") && !/911|988/.test(plan.who.join(" ")) ? [plan.urgency === "crisis" ? "988 Suicide & Crisis Lifeline (call or text 988), or 911 if in danger" : "911 or the nearest emergency room"].concat(plan.who) : plan.who).map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + "</ul></div>" +
         "<div class='card'><h3>Your plan of action</h3><ol class='list'>" + plan.steps.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ol>" +
         "<p class='hint'>" + (plan.sym ? "Not a diagnosis. Questions and advice based on the official pages linked above." : plan.source ? "Warning-sign questions based on " + srcLink(plan.source).replace("Source: ", "") + "." : "Warning-sign questions are general safety checks. When in doubt, call your doctor or 911.") + "</p>" +
         (plan.meanwhile.length ? "<h4>In the meantime</h4><ul class='list'>" + plan.meanwhile.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul><p class='hint'>General first-aid guidance, not a diagnosis. If you're unsure, get checked.</p>" : "") + "</div>" +
